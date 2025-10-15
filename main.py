@@ -3,7 +3,7 @@ from src.data_utils.create_synthetic_data import data
 from src.env.verifiable_rewards.workout_rewards import verify_workout_week
 from src.env.verifiable_rewards.nutrition_rewards import verify_nutrition_plan, verify_macros, verify_no_banned, verify_daily_meal_plan_macros
 from src.env.verifiable_rewards.schema_rewards import verify_nutrition_schema, verify_meal_plan_schema, verify_workout_schema, is_valid_json
-
+from src.env.verifiable_rewards.nutrition_rewards import nutrition_reward
 # Example nutrition plan output from agent
 plan_json = {
     "dailyMealPlans": data[0]["target_output"]["dailyMealPlans"]
@@ -41,6 +41,8 @@ def main():
     score, info = verify_daily_meal_plan_macros(daily_plan, daily_cal_target=600, daily_prot_target=136)
     print("Daily meal plan macros score:", score, "info:", info)
 
+    score, info = nutrition_reward(daily_plan, daily_cal_target=600, daily_prot_target=136, banned_keywords=None)
+    print("Nutrition reward score:", score, "info:", info)
 
 
 
