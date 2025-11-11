@@ -4,6 +4,7 @@ from src.env.verifiable_rewards.workout_rewards import verify_workout_week
 from src.env.verifiable_rewards.nutrition_rewards import verify_nutrition_plan, verify_macros, verify_no_banned, verify_daily_meal_plan_macros
 from src.env.verifiable_rewards.schema_rewards import verify_nutrition_schema, verify_meal_plan_schema, verify_workout_schema, is_valid_json
 from src.env.verifiable_rewards.nutrition_rewards import nutrition_reward
+from src.env.verifiable_rewards.nutrition_rewards import verify_daily_meal_plan_macros_v2
 # Example nutrition plan output from agent
 plan_json = {
     "dailyMealPlans": data[0]["target_output"]["dailyMealPlans"]
@@ -28,6 +29,9 @@ def main():
     )
     print("Nutrition score:", score, "info:", info)
 
+    score, info = verify_daily_meal_plan_macros_v2(plan_json, daily_cal_target=2300, daily_prot_target=136, daily_carb_target=100, daily_fat_target=50)
+    print("Nutrition score:", score, "info:", info)
+
     score, info = verify_nutrition_schema(plan_json)
     print("Nutrition schema score:", score, "info:", info)
 
@@ -41,7 +45,7 @@ def main():
     score, info = verify_daily_meal_plan_macros(daily_plan, daily_cal_target=600, daily_prot_target=136)
     print("Daily meal plan macros score:", score, "info:", info)
 
-    score, info = nutrition_reward(daily_plan, daily_cal_target=600, daily_prot_target=136, banned_keywords=None)
+    score, info = nutrition_reward(daily_plan, daily_cal_target=600, daily_prot_target=136, daily_carb_target=100, daily_fat_target=50, banned_keywords=None)
     print("Nutrition reward score:", score, "info:", info)
 
 

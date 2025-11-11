@@ -15,7 +15,7 @@ data = [
       "daily_prot_target": 136,
       "daily_carb_target": 200,
       "daily_fat_target": 50,
-      "banned_keywords": ["egg", "shellfish"]
+      "banned_keywords": ["eggs", "shellfish"]
     },
     "input_prompt": "Create a 7-day nutrition plan for this user (no eggs), matching her macro targets as closely as possible.",
     "target_output": {
@@ -24,7 +24,7 @@ data = [
           "day": 0,
           "meals": [
             {
-              "name": "Salmon & Avocado Toast",
+              "name": "Salmon & Avocado  Toast",
               "recipe": "rec_T101",
               "description": "Smoked salmon, avocado, whole grain toast, greens",
               "calories": 500,
