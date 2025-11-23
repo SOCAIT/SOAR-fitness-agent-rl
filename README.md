@@ -223,38 +223,6 @@ graph TB
     style F fill:#f3e5f5
 ```
 
-### Training Flow
-
-```mermaid
-sequenceDiagram
-    participant TS as Training Script
-    participant TR as ART Trainer
-    participant AG as Agent
-    participant PC as Pinecone
-    participant VR as Verifiable Rewards
-    participant LLM as Base Model
-
-    TS->>TR: Load scenarios & config
-    loop For each training step
-        TR->>AG: Sample scenario batch
-        loop For each scenario (4 rollouts)
-            AG->>LLM: Generate reasoning
-            LLM->>AG: Action (tool call)
-            AG->>PC: Search recipes
-            PC->>AG: Return recipes with macros
-            AG->>LLM: Continue reasoning
-            LLM->>AG: Final meal plan JSON
-            AG->>VR: Calculate reward
-            VR->>VR: Verify macros (±5%)
-            VR->>VR: Verify JSON schema
-            VR->>AG: Return reward score
-        end
-        AG->>TR: Return trajectories
-        TR->>LLM: Update model weights (GRPO)
-        TR->>TS: Log metrics
-    end
-```
-
 ### Agent Execution Flow
 
 ```mermaid
@@ -497,9 +465,8 @@ If you find a security vulnerability:
 
 For questions or issues:
 - 📖 Check [TROUBLESHOOTING.md](TROUBLESHOOTING.md) first
-- 🐛 [Open an issue on GitHub](https://github.com/yourusername/fitness-reasoning-rl-agent/issues)
-- 📧 Email: your.email@example.com
-- 💬 Discord: [Your Discord Server]
+- 🐛 [Open an issue on GitHub](https://github.com/SOCAIT/SOAR-fitness-agent-rl/issues)
+- 📧 Email: giannispast9@gmail.com
 
 ## 🌟 Star History
 
@@ -512,9 +479,9 @@ If you use this project in your research or article, please cite:
 ```bibtex
 @software{fitness_reasoning_rl_agent,
   title = {Fitness Reasoning RL Agent: Personalized Nutrition Planning with Verifiable Rewards},
-  author = {Your Name},
-  year = {2024},
-  url = {https://github.com/yourusername/fitness-reasoning-rl-agent},
+  author = {Ioannis Pastellas},
+  year = {2025},
+  url = {https://github.com/SOCAIT/SOAR-fitness-agent-rl},
   note = {Agent Reinforcement Training with LangGraph and Pinecone}
 }
 ```
