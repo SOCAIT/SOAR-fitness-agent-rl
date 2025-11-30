@@ -62,8 +62,8 @@ wandb/
 # Data and Logs
 logs/
 *.log
-*.jsonl
-data/*/
+# *.jsonl
+# data/*/
 outputs/
 checkpoints/
 
