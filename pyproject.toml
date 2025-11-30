@@ -30,7 +30,7 @@ dependencies = [
     "langchain-openai>=0.2.0",
     
     # External services
-    "pinecone-client>=5.0.0",
+    "pinecone>=5.0.0",
     "litellm>=1.0.0",
     
     # Data and ML
