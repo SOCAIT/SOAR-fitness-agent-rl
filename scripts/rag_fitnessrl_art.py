@@ -248,7 +248,7 @@ scenarios_list[0]
 
 # Model configuration (global variables for use in rollout function)
 BASE_MODEL_NAME = "Qwen/Qwen2.5-14B-Instruct"
-MODEL_NAME = "fitness-agent-langgraph-14B-qwen2.5-000"
+MODEL_NAME = "fitness-agent-langgraph-14B-qwen2.5-001"
 PROJECT_NAME = "fitness-agent-langgraph-rag"
 
 # These will be initialized in main()
@@ -310,12 +310,17 @@ NUTRITION PLAN PIPELINE
 2) USE RECIPE SEMANTIC SEARCH TOOL
    • Use recipe_semantic_search to find relevant recipes with correct nutrition info.
    • You MUST ALWAYS use the macros retrieved from the tool and NOT infer your own data.
-   • For each meal you include, set (calories, proteins, carbs, fats) to k × the tool macros for that chosen recipe (k may be fractional). Do not fabricate numbers.
+   • For each meal you include:
+     - Set "name" to the exact recipe name from the tool
+     - Set "quantity" to a multiplier (e.g., 1.0 for one serving, 1.5 for 1.5 servings, 0.5 for half serving)
+     - Calculate macros as: quantity × base_recipe_macros
+     - Example: If recipe has 400 cal and quantity=1.5, then calories should be 600
    • If a candidate recipe includes any banned keywords/ingredients from context, discard it and search again.
 
 3) MACRO ADJUSTMENT (per day)
-   • Sum macros for the day.
-   • If totals differ from the user's daily targets, swap recipes or adjust the multiplier k (still using tool macros) until daily totals are within ±5% of the user's targets (calories/protein/carbs/fat).
+   • Sum macros for the day across all meals.
+   • If totals differ from the user's daily targets, adjust the "quantity" field for meals (still using tool macros) until daily totals are within ±5% of the user's targets (calories/protein/carbs/fat).
+   • You can use fractional quantities like 0.75, 1.25, 1.5 to hit precise macro targets.
    • Respect ALL banned keywords/ingredients from context.
 
 4) JSON MEAL PLAN (scratch-step)
@@ -325,6 +330,7 @@ NUTRITION PLAN PIPELINE
        "meals": [
          {{
            "name": "Grilled Chicken & Rice",
+           "quantity": 1.5,
            "calories": 700,
            "proteins": 45,
            "carbs": 60,
@@ -334,8 +340,11 @@ NUTRITION PLAN PIPELINE
        ]
      }}
 
+   • The "quantity" field is a multiplier (can be fractional like 1.5, 0.75, 2.0) that represents portions/servings.
+   • Macros (calories, proteins, carbs, fats) should be: quantity × base_recipe_macros from recipe_semantic_search.
    • Ensure the summed macros for the day are within ±5% of the targets.
-   • IMPORTANT: Every "name" MUST match a recipe name previously returned by recipe_semantic_search. Macros MUST be exact multiples of that recipe's macros.
+   • IMPORTANT: Every "name" MUST match a recipe name previously returned by recipe_semantic_search. 
+   • The quantity field allows precise macro targeting by scaling recipe portions.
 
 5) IF YOU REACHED MAX_TURNS and you have not found a final answer, return the best final answer you can with all information you gathered.
 
@@ -628,15 +637,29 @@ def _flatten_plan_meals(payload: dict):
     return meals
 
 def _extract_totals_from_meal(meal: dict):
-    """Map plan keys -> canonical keys (proteins->protein, fats->fat)."""
+    """Map plan keys -> canonical keys (proteins->protein, fats->fat).
+    Returns (totals_dict, explicit_quantity) where quantity is the multiplier if present.
+    """
     totals = {}
+    quantity = None
+    
     if not isinstance(meal, dict):
-        return totals
+        return totals, quantity
+    
+    # Extract explicit quantity/multiplier if present
+    if "quantity" in meal:
+        try:
+            quantity = float(meal["quantity"])
+        except (ValueError, TypeError):
+            quantity = None
+    
+    # Extract macros
     if "calories" in meal: totals["calories"] = meal["calories"]
     if "carbs"    in meal: totals["carbs"]    = meal["carbs"]
     if "proteins" in meal: totals["protein"]  = meal["proteins"]
     if "fats"     in meal: totals["fat"]      = meal["fats"]
-    return totals
+    
+    return totals, quantity
 
 # ---------- catalog from tool logs ----------
 def _collect_catalog_from_logs_by_name(traj, tool_name="recipe_semantic_search"):
@@ -750,7 +773,7 @@ def provenance_reward_names_only_totals_only(
             continue
 
         canon = catalog[match_key]["macros"]
-        totals = _extract_totals_from_meal(meal)
+        totals, explicit_quantity = _extract_totals_from_meal(meal)
         if not totals:
             details.append({
                 "ok": False,
@@ -760,15 +783,33 @@ def provenance_reward_names_only_totals_only(
             })
             continue
 
-        m, worst_err = _infer_multiplier(canon, totals, min_dims=2)
-        ok = (m is not None and worst_err is not None and worst_err <= tol_pct)
+        # If explicit quantity provided, verify macros match quantity × base_macros
+        if explicit_quantity is not None:
+            # Check if provided macros are close to explicit_quantity × canon
+            worst_err = 0.0
+            for k in ("calories", "carbs", "protein", "fat"):
+                if k not in totals or k not in canon:
+                    continue
+                expected = canon[k] * explicit_quantity
+                actual = float(totals[k])
+                err = _rel_err(expected, actual)
+                if err > worst_err:
+                    worst_err = err
+            
+            ok = worst_err <= tol_pct
+            m = explicit_quantity
+        else:
+            # Fallback: infer multiplier from totals
+            m, worst_err = _infer_multiplier(canon, totals, min_dims=2)
+            ok = (m is not None and worst_err is not None and worst_err <= tol_pct)
 
         details.append({
             "ok": ok,
             "plan_name": plan_name_raw,
             "matched_recipe_name": catalog[match_key]["raw_name"],
             "matched_recipe_id": catalog[match_key]["id"],
-            "inferred_multiplier": m,
+            "quantity": m,
+            "explicit_quantity": explicit_quantity is not None,
             "worst_rel_err": worst_err,
         })
 
@@ -1049,7 +1090,7 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
             print(f"Nutrition reward: {reward}")
             print(f"Info: {nutri_info}")
 
-            prov_score, prov_info = provenance_reward_names_only_totals_only(payload, traj, tol_pct=0.07)
+            prov_score, prov_info = provenance_reward_names_only_totals_only(payload, traj, tol_pct=0.05)
             print(f"Provenance reward: {prov_score}")
             print(f"Info: {prov_info}")
 
@@ -1107,13 +1148,35 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
             #traj.reward = total_reward + random_noise * 0.005
             print(f"Total reward: {traj.reward}")
             traj.metrics["correct"] = score
-
-        # traj.reward= -1.0 + random_noise * 0.005
-        # traj.metrics["correct"] = traj.reward
+        else:
+            # CRITICAL: Penalize trajectories that don't produce a final answer
+            print("❌ No final answer produced!")
+            traj.reward = -0.5
+            traj.metrics["failure_reason"] = "no_final_answer"
+            traj.metrics["correct"] = 0.0
+            traj.metrics["macros_schema"] = 0.0
+            traj.metrics["provenance"] = 0.0
 
 
     except Exception as e:
-        print(f"Error running LangGraph agent: {e}")
+        print(f"❌ Error running LangGraph agent: {e}")
+        
+        # Different penalties for different error types
+        error_str = str(e).lower()
+        if "timeout" in error_str:
+            traj.reward = -0.3
+            traj.metrics["failure_reason"] = "timeout"
+        elif "parse" in error_str or "json" in error_str:
+            traj.reward = -0.4
+            traj.metrics["failure_reason"] = "parse_error"
+        else:
+            traj.reward = -0.5
+            traj.metrics["failure_reason"] = "unknown_error"
+        
+        traj.metrics["correct"] = 0.0
+        traj.metrics["macros_schema"] = 0.0
+        traj.metrics["provenance"] = 0.0
+        
         # Add error information to trajectory
         traj.messages_and_choices.append(
             {"role": "assistant", "content": f"Error: {str(e)}"}
@@ -1123,6 +1186,95 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
 
 
 print("LangGraph rollout function defined!")
+
+
+# ============================================================================
+# VALIDATION FUNCTIONS
+# ============================================================================
+
+async def run_validation(
+    model: art.Model,
+    val_scenarios: List[Scenario],
+    step: int,
+    num_samples: int = 10
+) -> Dict[str, float]:
+    """
+    Run validation on a subset of validation scenarios.
+    
+    Args:
+        model: The model to evaluate
+        val_scenarios: List of validation scenarios
+        step: Current training step
+        num_samples: Number of validation samples to evaluate
+    
+    Returns:
+        Dictionary with validation metrics
+    """
+    print(f"\n{'='*80}")
+    print(f"🔍 Running Validation at Step {step}")
+    print(f"{'='*80}")
+    
+    val_rewards = []
+    val_nutrition_scores = []
+    val_provenance_scores = []
+    val_success_rate = []
+    
+    # Take a subset of validation scenarios
+    val_sample = val_scenarios[:num_samples]
+    
+    for idx, val_scenario in enumerate(val_sample, 1):
+        print(f"\nValidating {idx}/{len(val_sample)}: {val_scenario.id}")
+        
+        try:
+            # Run rollout
+            val_traj = await rollout(
+                model, 
+                FitnessScenario(step=step, scenario=val_scenario)
+            )
+            
+            # Collect metrics
+            val_rewards.append(val_traj.reward)
+            
+            # Extract individual component scores
+            if hasattr(val_traj, 'metrics'):
+                if 'macros_schema' in val_traj.metrics:
+                    val_nutrition_scores.append(val_traj.metrics['macros_schema'])
+                if 'provenance' in val_traj.metrics:
+                    val_provenance_scores.append(val_traj.metrics['provenance'])
+            
+            # Track success (has final answer)
+            success = 1.0 if val_traj.final_answer is not None else 0.0
+            val_success_rate.append(success)
+            
+            print(f"  Reward: {val_traj.reward:.4f}, Success: {success}")
+            
+        except Exception as e:
+            print(f"  ⚠️ Validation error: {e}")
+            val_rewards.append(-0.5)
+            val_success_rate.append(0.0)
+    
+    # Calculate aggregate metrics
+    metrics = {
+        "val/reward_mean": sum(val_rewards) / len(val_rewards) if val_rewards else 0.0,
+        "val/reward_std": (sum((r - sum(val_rewards)/len(val_rewards))**2 for r in val_rewards) / len(val_rewards))**0.5 if len(val_rewards) > 1 else 0.0,
+        "val/success_rate": sum(val_success_rate) / len(val_success_rate) if val_success_rate else 0.0,
+    }
+    
+    if val_nutrition_scores:
+        metrics["val/nutrition_mean"] = sum(val_nutrition_scores) / len(val_nutrition_scores)
+    
+    if val_provenance_scores:
+        metrics["val/provenance_mean"] = sum(val_provenance_scores) / len(val_provenance_scores)
+    
+    # Print summary
+    print(f"\n{'='*80}")
+    print(f"📊 Validation Results (Step {step}):")
+    print(f"{'='*80}")
+    for metric_name, metric_value in metrics.items():
+        print(f"  {metric_name}: {metric_value:.4f}")
+    print(f"{'='*80}\n")
+    
+    return metrics
 
 
 async def main():
@@ -1180,19 +1332,45 @@ async def main():
         "rollouts_per_group": 8,
         "learning_rate": 1e-5,
         "max_steps": 150,
+        "validation_every": 10,      # Run validation every N steps
+        "validation_samples": 10,     # Number of validation samples
+        "save_best": True,            # Save best model based on validation
     }
 
     print(f"\n📋 Training Configuration:")
     for key, value in training_config.items():
         print(f"  {key}: {value}")
     print()
+    
+    # Split scenarios into train and validation sets
+    train_scenarios = [s for s in scenarios_list if s.split == "train"]
+    val_scenarios = [s for s in scenarios_list if s.split == "test"]
+    
+    print(f"\n📊 Dataset Split:")
+    print(f"  Training scenarios: {len(train_scenarios)}")
+    print(f"  Validation scenarios: {len(val_scenarios)}")
+    
+    # If no explicit validation set, create one from training
+    if not val_scenarios:
+        print("  ⚠️ No validation scenarios found, creating 80/20 split from training data")
+        random.shuffle(train_scenarios)
+        split_idx = int(len(train_scenarios) * 0.8)
+        val_scenarios = train_scenarios[split_idx:]
+        train_scenarios = train_scenarios[:split_idx]
+        print(f"  New split - Train: {len(train_scenarios)}, Val: {len(val_scenarios)}")
+    
+    print()
 
-    # Use iterate_dataset with real training scenarios
+    # Use iterate_dataset with training scenarios only
     training_iterator = iterate_dataset(
-        scenarios_list,
+        train_scenarios,
         groups_per_step=training_config["groups_per_step"],
         num_epochs=training_config["num_epochs"],
     )
+    
+    # Track best validation performance
+    best_val_reward = float('-inf')
+    best_val_step = 0
 
     for batch in training_iterator:
         print(
@@ -1236,14 +1414,58 @@ async def main():
         )
 
         print(f"✅ Completed training step {batch.step}")
-
+        
+        # Run validation periodically
+        should_validate = (
+            batch.step % training_config["validation_every"] == 0 or
+            batch.step == training_config["max_steps"] or
+            batch.step == 1  # Always validate after first step
+        )
+        
+        if should_validate and val_scenarios:
+            val_metrics = await run_validation(
+                model=model,
+                val_scenarios=val_scenarios,
+                step=batch.step,
+                num_samples=training_config["validation_samples"]
+            )
+            
+            # Log to Weave/W&B if available
+            if os.getenv("WANDB_API_KEY", ""):
+                try:
+                    import wandb
+                    # Log validation metrics
+                    wandb.log({
+                        "step": batch.step,
+                        **val_metrics
+                    })
+                except Exception as e:
+                    print(f"⚠️ Failed to log to W&B: {e}")
+            
+            # Track best model
+            current_val_reward = val_metrics.get("val/reward_mean", float('-inf'))
+            if training_config["save_best"] and current_val_reward > best_val_reward:
+                best_val_reward = current_val_reward
+                best_val_step = batch.step
+                print(f"\n🌟 New best validation reward: {best_val_reward:.4f} at step {batch.step}")
+                
+                # Save checkpoint (optional - ART handles this automatically)
+                # You can add custom checkpoint saving here if needed
+        
         # Stop after max_steps
         if batch.step >= training_config["max_steps"]:
             print(f"\n🎉 Training complete! Reached max_steps: {training_config['max_steps']}")
+            if best_val_reward > float('-inf'):
+                print(f"🏆 Best validation reward: {best_val_reward:.4f} at step {best_val_step}")
             break
 
     print("\n" + "=" * 80)
     print("Training finished successfully!")
+    print("=" * 80)
+    print(f"\n📈 Final Statistics:")
+    print(f"  Total steps: {batch.step}")
+    if best_val_reward > float('-inf'):
+        print(f"  Best validation reward: {best_val_reward:.4f} (step {best_val_step})")
     print("=" * 80)
 
 

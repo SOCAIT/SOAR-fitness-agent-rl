@@ -59,6 +59,10 @@ venv.bak/
 wandb/
 *.wandb
 
+# Cursor 
+.cursor/
+md_guides/
+
 # Data and Logs
 logs/
 *.log
@@ -117,3 +121,5 @@ yarn.lock
 *.swp
 *~
 .#*
+
+pyproject_mac.toml
