@@ -248,7 +248,7 @@ scenarios_list[0]
 
 # Model configuration (global variables for use in rollout function)
 BASE_MODEL_NAME = "Qwen/Qwen2.5-14B-Instruct"
-MODEL_NAME = "fitness-agent-langgraph-14B-qwen2.5-001"
+MODEL_NAME = "fitness-agent-langgraph-14B-qwen2.5-002"
 PROJECT_NAME = "fitness-agent-langgraph-rag"
 
 # These will be initialized in main()
@@ -850,10 +850,26 @@ def combine_reward_grpo(
     """
 
     # ---- simple schedule for beta (increase provenance pressure over time) ----
+    # def _beta_schedule(s: int | None) -> float:
+    #     if s is None:  return 1.5
+    #     if s < 100:    return 1.2
+    #     if s < 300:    return 1.5
+    #     return 1.8
     def _beta_schedule(s: int | None) -> float:
-        if s is None:  return 1.5
-        if s < 100:    return 1.2
-        if s < 300:    return 1.5
+        """
+        Schedule for provenance emphasis:
+        - very low early (0–50): focus on macro/schema correctness
+        - moderate mid (50–150): start caring about provenance
+        - strong later (150+): provenance matters a lot
+        """
+        if s is None:
+            return 1.0
+        if s < 50:
+            return 0.5      # very soft provenance early on
+        if s < 150:
+            return 1.0      # balanced
+        if s < 300:
+            return 1.5      # stronger provenance
         return 1.8
 
     B = beta if beta is not None else _beta_schedule(step)
@@ -1090,7 +1106,28 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
             print(f"Nutrition reward: {reward}")
             print(f"Info: {nutri_info}")
 
-            prov_score, prov_info = provenance_reward_names_only_totals_only(payload, traj, tol_pct=0.05)
+            # Make provenance a bit softer early, stricter later
+            if fitness_scenario.step < 100:
+                tol_pct = 0.10        # allow 10% macro deviation early
+                name_cutoff = 0.85    # easier fuzzy name match
+            else:
+                tol_pct = 0.05        # tighten to 5% later
+                name_cutoff = 0.92    # stricter match
+
+            prov_score, prov_info = provenance_reward_names_only_totals_only(
+                payload,
+                traj,
+                tol_pct=tol_pct,
+                name_match_cutoff=name_cutoff,
+            )
+            # prov_score, prov_info = provenance_reward_names_only_totals_only(
+            #     payload,
+            #     traj,
+            #     tol_pct=tol_pct,
+            #     name_match_cutoff=name_cutoff,
+            # )
+
+            # prov_score, prov_info = provenance_reward_names_only_totals_only(payload, traj, tol_pct=0.05)
             print(f"Provenance reward: {prov_score}")
             print(f"Info: {prov_info}")
 
@@ -1104,7 +1141,10 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
             BETA = 1.5   # try 1.3–2.0
             GAMMA = 1.0  # macro emphasis; increase to >1 if you want tighter macro pressure
 
-            total_reward = (reward ** GAMMA) * (prov_score ** BETA)
+            _product_reward = (reward ** GAMMA) * (prov_score ** BETA)
+
+            # This product is just a diagnostic metric now, not the RL reward.
+            traj.metrics["macros_prov_product"] = _product_reward
 
             traj.metrics["macros_schema"] = reward
             traj.metrics["provenance"] = prov_score
@@ -1116,6 +1156,7 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
                 nutri=macros_schema_score,
                 prov=provenance_score,
                 step=getattr(fitness_scenario, "step", None),
+                mix=0.25
                 # gamma=1.0,      # usually fine
                 # beta=None,      # let schedule drive it
                 # eps=0.03, mix=0.15, jitter=1e-3  # default values
@@ -1150,12 +1191,12 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
             traj.metrics["correct"] = score
         else:
             # CRITICAL: Penalize trajectories that don't produce a final answer
+            # Penalize trajectories that don't produce a final answer,
+            # but keep the penalty mild so it doesn't dominate training.
             print("❌ No final answer produced!")
-            traj.reward = -0.5
-            # Store string reason in metadata (safe)
+            traj.reward = -0.1
             traj.metadata["failure_reason"] = "no_final_answer"
-            # Store numeric indicator in metrics (safe for aggregation)
-            traj.metrics["failure_code"] = 1.0 
+            traj.metrics["failure_code"] = 0.5
             traj.metrics["correct"] = 0.0
             traj.metrics["macros_schema"] = 0.0
             traj.metrics["provenance"] = 0.0
@@ -1164,32 +1205,28 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
     except Exception as e:
         print(f"❌ Error running LangGraph agent: {e}")
         
-        # Different penalties for different error types
+        # Different penalties for different error types (milder)
         error_str = str(e).lower()
         failure_reason = "unknown_error"
         failure_code = 2.0
         
         if "timeout" in error_str:
-            traj.reward = -0.3
+            traj.reward = -0.05      # small penalty
             failure_reason = "timeout"
             failure_code = 3.0
         elif "parse" in error_str or "json" in error_str:
-            traj.reward = -0.4
+            traj.reward = -0.08      # slightly stronger, but still mild
             failure_reason = "parse_error"
             failure_code = 4.0
         else:
-            traj.reward = -0.5
+            traj.reward = -0.1       # generic failure
         
-        # Store string reason in metadata
         traj.metadata["failure_reason"] = failure_reason
-        
-        # Store numeric metrics
         traj.metrics["failure_code"] = failure_code
         traj.metrics["correct"] = 0.0
         traj.metrics["macros_schema"] = 0.0
         traj.metrics["provenance"] = 0.0
         
-        # Add error information to trajectory
         traj.messages_and_choices.append(
             {"role": "assistant", "content": f"Error: {str(e)}"}
         )

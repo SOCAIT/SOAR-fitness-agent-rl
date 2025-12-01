@@ -850,10 +850,27 @@ def combine_reward_grpo(
     """
 
     # ---- simple schedule for beta (increase provenance pressure over time) ----
+    # def _beta_schedule(s: int | None) -> float:
+    #     if s is None:  return 1.5
+    #     if s < 100:    return 1.2
+    #     if s < 300:    return 1.5
+    #     return 1.8
+
     def _beta_schedule(s: int | None) -> float:
-        if s is None:  return 1.5
-        if s < 100:    return 1.2
-        if s < 300:    return 1.5
+        """
+        Schedule for provenance emphasis:
+        - very low early (0–50): focus on macro/schema correctness
+        - moderate mid (50–150): start caring about provenance
+        - strong later (150+): provenance matters a lot
+        """
+        if s is None:
+            return 1.0
+        if s < 50:
+            return 0.5      # very soft provenance early on
+        if s < 150:
+            return 1.0      # balanced
+        if s < 300:
+            return 1.5      # stronger provenance
         return 1.8
 
     B = beta if beta is not None else _beta_schedule(step)
