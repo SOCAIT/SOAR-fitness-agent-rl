@@ -372,7 +372,7 @@ def extract_meal_names(data):
     return_data = []
 
 
-    return [{"id" : hit['_id'] ,"name": hit["fields"]["name"], "calories":  hit["fields"]["calories"],"carbs":  hit["fields"]["carbohydrates"], "protein": hit["fields"]["protein"], "fat":  hit["fields"]["fat"]}  for hit in data["hits"] if "fields" in hit and "name" in hit["fields"]]
+    return [{"id" : hit['_id'] ,"name": hit["fields"]["name"], "calories":  hit["fields"]["calories"],"carbs":  hit["fields"]["carbs"], "protein": hit["fields"]["protein"], "fat":  hit["fields"]["fat"]}  for hit in data["hits"] if "fields" in hit and "name" in hit["fields"]]
 
  # Search the dense index
 results = recipe_index.search(

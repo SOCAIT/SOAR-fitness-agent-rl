@@ -372,7 +372,7 @@ def extract_meal_names(data):
     return_data = []
 
 
-    return [{"id" : hit['_id'] ,"name": hit["fields"]["name"], "calories":  hit["fields"]["calories"],"carbs":  hit["fields"]["carbohydrates"], "protein": hit["fields"]["protein"], "fat":  hit["fields"]["fat"]}  for hit in data["hits"] if "fields" in hit and "name" in hit["fields"]]
+    return [{"id" : hit['_id'] ,"name": hit["fields"]["name"], "calories":  hit["fields"]["calories"],"carbs":  hit["fields"]["carbs"], "protein": hit["fields"]["protein"], "fat":  hit["fields"]["fat"]}  for hit in data["hits"] if "fields" in hit and "name" in hit["fields"]]
 
  # Search the dense index
 results = recipe_index.search(
@@ -1339,12 +1339,12 @@ async def main():
     from art.langgraph import wrap_rollout
 
     training_config = {
-        "groups_per_step": 4,
+        "groups_per_step": 6,
         "num_epochs": 3,
-        "rollouts_per_group": 8,
+        "rollouts_per_group": 12,
         "learning_rate": 1e-5,
         "max_steps": 150,
-        "validation_every": 10,      # Run validation every N steps
+        "validation_every": 5,      # Run validation every N steps
         "validation_samples": 10,     # Number of validation samples
         "save_best": True,            # Save best model based on validation
     }
