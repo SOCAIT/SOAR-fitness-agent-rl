@@ -1152,7 +1152,10 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
             # CRITICAL: Penalize trajectories that don't produce a final answer
             print("❌ No final answer produced!")
             traj.reward = -0.5
-            traj.metrics["failure_reason"] = "no_final_answer"
+            # Store string reason in metadata (safe)
+            traj.metadata["failure_reason"] = "no_final_answer"
+            # Store numeric indicator in metrics (safe for aggregation)
+            traj.metrics["failure_code"] = 1.0 
             traj.metrics["correct"] = 0.0
             traj.metrics["macros_schema"] = 0.0
             traj.metrics["provenance"] = 0.0
@@ -1163,16 +1166,25 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
         
         # Different penalties for different error types
         error_str = str(e).lower()
+        failure_reason = "unknown_error"
+        failure_code = 2.0
+        
         if "timeout" in error_str:
             traj.reward = -0.3
-            traj.metrics["failure_reason"] = "timeout"
+            failure_reason = "timeout"
+            failure_code = 3.0
         elif "parse" in error_str or "json" in error_str:
             traj.reward = -0.4
-            traj.metrics["failure_reason"] = "parse_error"
+            failure_reason = "parse_error"
+            failure_code = 4.0
         else:
             traj.reward = -0.5
-            traj.metrics["failure_reason"] = "unknown_error"
         
+        # Store string reason in metadata
+        traj.metadata["failure_reason"] = failure_reason
+        
+        # Store numeric metrics
+        traj.metrics["failure_code"] = failure_code
         traj.metrics["correct"] = 0.0
         traj.metrics["macros_schema"] = 0.0
         traj.metrics["provenance"] = 0.0

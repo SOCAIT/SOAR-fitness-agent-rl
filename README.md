@@ -348,7 +348,7 @@ for each training step:
 
 - **Pinecone Indexes**:
   - `syntrafit-recipes`: Recipe database with nutritional info
-  - `syntrafit-exercises`: Exercise database with metadata
+  - `syntrafit-exercises`: Exercise database with metadata (not used right now)
 
 - **Retrieval**: Agent queries Pinecone with meal ideas and gets real recipes with accurate macros
 
@@ -398,18 +398,6 @@ Contributions are welcome! Please:
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📝 Citation
-
-If you use this project in your research, please cite:
-
-```bibtex
-@software{fitness_reasoning_rl_agent,
-  title = {Fitness Reasoning RL Agent},
-  author = {Your Name},
-  year = {2024},
-  url = {https://github.com/yourusername/fitness-reasoning-rl-agent}
-}
-```
 
 ## 📄 License
 
@@ -447,7 +435,7 @@ api_key = "sk-xxx..."  # Never!
 If you find a security vulnerability:
 
 1. **Don't** open a public issue
-2. Email: security@example.com with:
+2. Email: socait.zero@gmail.com with:
    - Description of vulnerability
    - Steps to reproduce
    - Potential impact
