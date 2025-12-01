@@ -1125,6 +1125,24 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
 
             traj.metrics["macros_schema"] = reward
             traj.metrics["provenance"] = prov_score
+            
+            # Detailed metrics for W&B
+            traj.metrics["schema_reward"] = nutri_info.get("R_schema", 0.0)
+            traj.metrics["macro_reward"] = nutri_info.get("R_macro", 0.0)
+            traj.metrics["banned_reward"] = nutri_info.get("R_banned", 0.0)
+            
+            # Strict success definition: 
+            # 1. Schema is perfect (R_schema == 1.0)
+            # 2. Macros are within tight tolerance (R_macro > 0.99)
+            # 3. No banned items (R_banned == 1.0)
+            # 4. Provenance is perfect (prov_score == 1.0)
+            is_strict_success = (
+                nutri_info.get("R_schema", 0.0) == 1.0 and
+                nutri_info.get("R_macro", 0.0) > 0.99 and
+                nutri_info.get("R_banned", 1.0) == 1.0 and
+                prov_score == 1.0
+            )
+            traj.metrics["strict_success"] = 1.0 if is_strict_success else 0.0
 
             macros_schema_score = reward   # use the SAME metric you plotted for macros/schema
             provenance_score    = prov_score     # the one you plotted for provenance
@@ -1247,6 +1265,8 @@ async def run_validation(
     val_nutrition_scores = []
     val_provenance_scores = []
     val_success_rate = []
+    val_strict_success_rate = []
+    val_schema_scores = []
     
     # Take a subset of validation scenarios
     val_sample = val_scenarios[:num_samples]
@@ -1270,6 +1290,10 @@ async def run_validation(
                     val_nutrition_scores.append(val_traj.metrics['macros_schema'])
                 if 'provenance' in val_traj.metrics:
                     val_provenance_scores.append(val_traj.metrics['provenance'])
+                if 'strict_success' in val_traj.metrics:
+                    val_strict_success_rate.append(val_traj.metrics['strict_success'])
+                if 'schema_reward' in val_traj.metrics:
+                    val_schema_scores.append(val_traj.metrics['schema_reward'])
             
             # Track success (has final answer)
             success = 1.0 if val_traj.final_answer is not None else 0.0
@@ -1281,6 +1305,7 @@ async def run_validation(
             print(f"  ⚠️ Validation error: {e}")
             val_rewards.append(-0.5)
             val_success_rate.append(0.0)
+            val_strict_success_rate.append(0.0)
     
     # Calculate aggregate metrics
     metrics = {
@@ -1294,6 +1319,12 @@ async def run_validation(
     
     if val_provenance_scores:
         metrics["val/provenance_mean"] = sum(val_provenance_scores) / len(val_provenance_scores)
+        
+    if val_strict_success_rate:
+        metrics["val/strict_success_rate"] = sum(val_strict_success_rate) / len(val_strict_success_rate)
+        
+    if val_schema_scores:
+        metrics["val/schema_mean"] = sum(val_schema_scores) / len(val_schema_scores)
     
     # Print summary
     print(f"\n{'='*80}")
