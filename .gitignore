@@ -123,3 +123,4 @@ yarn.lock
 .#*
 
 pyproject_mac.toml
+.models/

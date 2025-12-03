@@ -248,7 +248,7 @@ scenarios_list[0]
 
 # Model configuration (global variables for use in rollout function)
 BASE_MODEL_NAME = "Qwen/Qwen2.5-14B-Instruct"
-MODEL_NAME = "fitness-agent-langgraph-14B-qwen2.5-004"
+MODEL_NAME = "fitness-agent-langgraph-14B-qwen2.5-005"
 PROJECT_NAME = "fitness-agent-langgraph-rag"
 
 # These will be initialized in main()
