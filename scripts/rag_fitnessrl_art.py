@@ -1429,6 +1429,8 @@ async def main():
         train_scenarios,
         groups_per_step=training_config["groups_per_step"],
         num_epochs=training_config["num_epochs"],
+        initial_step=await model.get_step()
+
     )
     
     # Track best validation performance
