@@ -248,7 +248,7 @@ scenarios_list[0]
 
 # Model configuration (global variables for use in rollout function)
 BASE_MODEL_NAME = "Qwen/Qwen2.5-14B-Instruct"
-MODEL_NAME = "fitness-agent-langgraph-14B-qwen2.5-004"
+MODEL_NAME = "fitness-agent-langgraph-14B-qwen2.5-003"
 PROJECT_NAME = "fitness-agent-langgraph-rag"
 
 # These will be initialized in main()
@@ -841,7 +841,7 @@ def combine_reward_grpo(
     gamma: float = 1.0,           # emphasis on macros
     beta: float | None = None,    # emphasis on provenance (if None -> schedule)
     eps: float = 0.03,            # floor to avoid zero-collapse in the gate
-    mix: float = 0.25,            # how much dense linear part to mix in (0..0.3 works well)
+    mix: float = 0.15,            # how much dense linear part to mix in (0..0.3 works well)
     jitter: float = 1e-3,         # tiny tie-breaker within a group
 ) -> Tuple[float, Dict[str, Any]]:
     """
@@ -944,6 +944,30 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
     daily_fat_target = scenario.daily_fat_target
 
 
+    # def log_tool(tool_name):
+    #     def decorator(fn):
+    #         @wraps(fn)
+    #         def wrapper(*args, **kwargs):
+    #             call = {
+    #                 "tool": tool_name,
+    #                 "ts": datetime.utcnow().isoformat(),
+    #                 "args": args, "kwargs": kwargs
+    #             }
+    #             print(f"[TOOL START] {tool_name} args={kwargs}")
+    #             traj.messages_and_choices.append({"role": "tool_log", "content": json.dumps({"start": call})})
+    #             try:
+    #                 out = fn(*args, **kwargs)
+    #                 print(f"[TOOL END] {tool_name} result_preview={str(out)[:400]}")
+    #                 traj.messages_and_choices.append({"role": "tool_log", "content": json.dumps({"end": {**call, "result": out}})})
+    #                 return out
+    #             except Exception as e:
+    #                 print(f"[TOOL ERROR] {tool_name}: {e}")
+    #                 traj.messages_and_choices.append({"role": "tool_log", "content": json.dumps({"error": {**call, "error": str(e)}})})
+    #                 raise
+    #         return wrapper
+    #     return decorator
+
+
     def log_tool(tool_name):
         def decorator(fn):
             @wraps(fn)
@@ -1018,15 +1042,13 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
     tools = [ recipe_semantic_search,  return_final_answer_tool] #recipe_semantic_search,
 
     # Pass the local path to the model
-    chat_model = init_chat_model(f"{model.name}", temperature=0.2)
+    chat_model = init_chat_model(f"{model.name}", temperature=0.5)
 
 
     # Create the LangGraph ReAct agent
     react_agent = create_react_agent(chat_model, tools)
     print("LangGraph agent created!")
     print(react_agent)
-
-    MAX_TURNS = 20  
 
     try:
         # Run the agent
