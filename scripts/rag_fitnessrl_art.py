@@ -1161,6 +1161,8 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
             traj.reward = score
             print(f"Combined reward: {score}")
             print(f"Info: {info}")
+
+            print("Step:", fitness_scenario.step)
             #traj.metrics["reward_info"] = info
 
 
@@ -1353,13 +1355,16 @@ async def main():
         base_model=BASE_MODEL_NAME,
     )
     
+    import torch
+    
     model._internal_config = art.dev.InternalModelConfig(
         init_args=art.dev.InitArgs(
             max_seq_length=8192,
         ),
         engine_args=art.dev.EngineArgs(
             enforce_eager=True,
-            gpu_memory_utilization=0.85,  # B200 has massive VRAM (192GB) - use more!
+            gpu_memory_utilization=0.85,
+            tensor_parallel_size=torch.cuda.device_count(),
         ),
     )
     
@@ -1385,8 +1390,8 @@ async def main():
     from art.langgraph import wrap_rollout
 
     training_config = {
-        "groups_per_step": 6,
-        "num_epochs": 3,
+        "groups_per_step": 2,
+        "num_epochs": 5,
         "rollouts_per_group": 12,
         "learning_rate": 1e-5,
         "max_steps": 150,
@@ -1493,10 +1498,13 @@ async def main():
                 try:
                     import wandb
                     # Log validation metrics
+                    # NOTE: Use commit=False to avoid incrementing the global W&B step.
+                    # This merges validation metrics with the *next* training step's log,
+                    # keeping the step counter in sync with 'art' library's expectations.
                     wandb.log({
-                        "step": batch.step,
-                        **val_metrics
-                    })
+                        **val_metrics,
+                        "validation_step": batch.step 
+                    }, commit=False)
                 except Exception as e:
                     print(f"⚠️ Failed to log to W&B: {e}")
             
