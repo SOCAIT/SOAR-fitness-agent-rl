@@ -1380,7 +1380,36 @@ async def main():
     print("✅ Model registered successfully!")
     
     # Initialize Weave for tracking
+    # if os.getenv("WANDB_API_KEY", ""):
+    #     print("📊 Initializing Weave for experiment tracking...")
+    #     weave.init(model.project, settings={"print_call_link": False})
+    #     print("✅ Weave initialized!")
+
+    # Initialize Weave + WandB
     if os.getenv("WANDB_API_KEY", ""):
+        import wandb
+
+        # 🔑 1. Make sure no old run id is forced
+        os.environ.pop("WANDB_RUN_ID", None)
+        os.environ["WANDB_RESUME"] = "never"
+
+        # 🔑 2. Start a completely NEW WandB run
+        run_id = uuid.uuid4().hex  # new unique id
+        wandb.init(
+            project=PROJECT_NAME,                     # "fitness-agent-langgraph-rag"
+            name=f"{MODEL_NAME}-resume-from-37",      # nice human name
+            id=run_id,                                # NEW id
+            resume="never",                           # absolutely do not resume
+            reinit=True,
+        )
+
+        # Optional but recommended: use 'step' as x-axis
+        wandb.define_metric("step")
+        wandb.define_metric("*", step_metric="step")
+
+        print(f"📊 Initialized new W&B run with id={run_id}")
+
+        # 3. Now init Weave – it will hook into this run
         print("📊 Initializing Weave for experiment tracking...")
         weave.init(model.project, settings={"print_call_link": False})
         print("✅ Weave initialized!")
