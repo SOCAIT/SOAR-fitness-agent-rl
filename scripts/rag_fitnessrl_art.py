@@ -1431,7 +1431,7 @@ async def main():
     await model.register(backend)
     print("✅ Model registered successfully!")
     
-    Initialize Weave for tracking
+    #Initialize Weave for tracking
     if os.getenv("WANDB_API_KEY", ""):
         print("📊 Initializing Weave for experiment tracking...")
         weave.init(model.project, settings={"print_call_link": False})
