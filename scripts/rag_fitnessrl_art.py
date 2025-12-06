@@ -250,7 +250,7 @@ scenarios_list[0]
 BASE_MODEL_NAME = "Qwen/Qwen2.5-14B-Instruct"
 MODEL_NAME = "fitness-agent-langgraph-14B-qwen2.5-005"
 PROJECT_NAME = "fitness-agent-langgraph-rag"
-SEED = 43
+SEED = 42
 
 # These will be initialized in main()
 model = None
