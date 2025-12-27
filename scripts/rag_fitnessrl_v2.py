@@ -28,8 +28,18 @@ GPU_MEMORY_UTILIZATION = 0.60
 MAX_SEQ_LENGTH = 8192
 ENFORCE_EAGER = True
 
+# Import unsloth FIRST before any other ML libraries to avoid circular import issues
+# This is critical for tensor parallelism with vLLM worker spawning
 import os
 import sys
+
+# Import unsloth early to ensure it's fully initialized before vLLM spawns workers
+# This prevents circular import errors during multiprocessing worker initialization
+# The import must happen before any transformers/trl/peft imports
+try:
+    import unsloth  # noqa: F401
+except ImportError:
+    pass  # Unsloth may not be available, but that's okay
 import json
 import math
 import re
