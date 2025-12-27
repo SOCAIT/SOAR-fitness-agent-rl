@@ -603,7 +603,17 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
             score, info = await combined_reward_v2(payload, scenario, traj)
             traj.reward = score
             traj.final_answer = final_answer
-            traj.metrics.update(info)
+            
+            # Only store numeric metrics (ART can't handle dicts)
+            for key, value in info.items():
+                if isinstance(value, (int, float)):
+                    traj.metrics[key] = value
+                elif isinstance(value, dict):
+                    # Flatten nested dicts with prefix
+                    for sub_key, sub_value in value.items():
+                        if isinstance(sub_value, (int, float)):
+                            traj.metrics[f"{key}_{sub_key}"] = sub_value
+            
             traj.metrics["correct"] = score
             print(f"Step {fitness_scenario.step} | ID {scenario.id} | Reward: {score:.3f}")
         else:
