@@ -17,6 +17,7 @@ PREREQUISITES:
 USAGE:
 ------
     python scripts/becnhmark_rag_fitness_art.py
+    python scripts/becnhmark_rag_fitness_art.py --overwrite --seeds 42,123,456  # Rerun all models with multiple seeds
 
 The script will:
 1. Load test scenarios from data/fitness_scenarios.jsonl
@@ -38,6 +39,7 @@ import re
 import random
 import difflib
 import uuid
+import argparse
 from pathlib import Path
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime
@@ -226,14 +228,50 @@ print(Counter(training_scenarios['split']))
 
 # Models to benchmark
 MODELS_TO_TEST = [
-    {"name": "gpt-4o-mini", "provider": "openai", "temperature": 0.2},
-    {"name": "gpt-4o", "provider": "openai", "temperature": 0.2},
-    {"name": "gpt-4-turbo", "provider": "openai", "temperature": 0.2},
+    # {"name": "gpt-4o-mini", "provider": "openai", "temperature": 0.2},
+    # {"name": "gpt-4o", "provider": "openai", "temperature": 0.2},
+    # {"name": "gpt-4-turbo", "provider": "openai", "temperature": 0.2},
     {"name": "claude-3-5-sonnet-20241022", "provider": "anthropic", "temperature": 0.2},
     {"name": "claude-3-opus-20240229", "provider": "anthropic", "temperature": 0.2},
 ]
 
-MAX_TURNS = 30
+MAX_TURNS = 20
+SEED = 42
+
+# ============================================================================
+# SEED SETTING FOR STATISTICAL ROBUSTNESS
+# ============================================================================
+
+def set_all_seeds(seed: int = SEED):
+    """
+    Set seeds for all random number generators to ensure reproducibility.
+    
+    Args:
+        seed: Integer seed value (default: SEED constant)
+    """
+    import random
+    import os
+    
+    random.seed(seed)
+    
+    try:
+        import numpy as np
+        np.random.seed(seed)
+    except ImportError:
+        pass
+    
+    try:
+        import torch
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        os.environ['PYTHONHASHSEED'] = str(seed)
+    except ImportError:
+        pass
+    
+    print(f"🌱 All seeds set to: {seed}")
 
 PLANNER_PROMPT = f"""
 You are a nutrition planner specialist who creates daily nutrition plans. Think carefully and pay great attention to macro numbers.
@@ -746,10 +784,10 @@ async def benchmark_rollout(
             banned_keywords = scenario.banned_keywords
 
             reward, nutri_info = nutrition_reward(
-                payload,
-                daily_cal_target=daily_cal_target,
-                daily_prot_target=daily_prot_target,
-                banned_keywords=banned_keywords,
+                      payload,
+                      daily_cal_target=daily_cal_target,
+                      daily_prot_target=daily_prot_target,
+                      banned_keywords=banned_keywords,
                 daily_carb_target=daily_carb_target,
                 daily_fat_target=daily_fat_target,
                 step=None,  # No step for benchmarking
@@ -871,13 +909,74 @@ def create_chat_model(model_config: Dict[str, Any]) -> BaseChatModel:
     else:
         raise ValueError(f"Unknown provider: {provider}")
 
-async def run_benchmark():
+
+def _normalize_detailed_entries(raw_detailed: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    normalized: Dict[str, Dict[str, Any]] = {}
+    for model_name, entry in raw_detailed.items():
+        if isinstance(entry, dict):
+            normalized_entry = {}
+            for seed_key, seed_value in entry.items():
+                normalized_entry[str(seed_key)] = seed_value if isinstance(seed_value, list) else [seed_value]
+        elif isinstance(entry, list):
+            normalized_entry = {"legacy": entry}
+        elif entry is None:
+            normalized_entry = {}
+        else:
+            normalized_entry = {"legacy": [entry]}
+        normalized[model_name] = normalized_entry
+    return normalized
+
+
+def _aggregate_summary_entries(entries_dict: Dict[str, Any]) -> tuple[Dict[str, Dict[str, float]], int]:
+    metrics_agg: Dict[str, List[float]] = defaultdict(list)
+    total_entries = 0
+    for seed_entries in entries_dict.values():
+        if not isinstance(seed_entries, list):
+            continue
+        total_entries += len(seed_entries)
+        for entry in seed_entries:
+            metrics = entry.get("metrics", {})
+            if not isinstance(metrics, dict):
+                continue
+            for metric_name, metric_value in metrics.items():
+                try:
+                    metrics_agg[metric_name].append(float(metric_value))
+                except (TypeError, ValueError):
+                    continue
+
+    summary: Dict[str, Dict[str, float]] = {}
+    for metric_name, values in metrics_agg.items():
+        if not values:
+            continue
+        mean = sum(values) / len(values)
+        std = (sum((v - mean) ** 2 for v in values) / len(values)) ** 0.5 if len(values) > 1 else 0.0
+        summary[metric_name] = {
+            "mean": mean,
+            "std": std,
+            "min": min(values),
+            "max": max(values),
+        }
+    return summary, total_entries
+
+async def run_benchmark(overwrite: bool = False, seeds: Optional[List[int]] = None):
     """Run benchmarks across all configured models."""
-    
+
+    seeds_to_use = seeds or [SEED]
+    processed_seeds: List[int] = []
+    for seed in seeds_to_use:
+        try:
+            processed_seeds.append(int(seed))
+        except (TypeError, ValueError):
+            continue
+    if not processed_seeds:
+        processed_seeds = [SEED]
+    processed_seeds = list(dict.fromkeys(processed_seeds))
+
     print("=" * 80)
     print("Starting LLM Benchmark")
     print("=" * 80)
-    
+    print(f"🔢 Seeds to run: {processed_seeds}")
+
     # Get test scenarios
     test_scenarios = [s for s in scenarios_list if s.split == "test"]
     if not test_scenarios:
@@ -886,101 +985,157 @@ async def run_benchmark():
 
     test_scenarios = test_scenarios[:20]
 
-    # Set seed for reproducibility
-    set_all_seeds(SEED)
-    
     print(f"\n📊 Benchmarking on {len(test_scenarios)} scenarios")
     print(f"📋 Models to test: {[m['name'] for m in MODELS_TO_TEST]}\n")
-    
-    # Results storage
-    all_results = defaultdict(list)
-    
-    # Test each model
+
+    results_file = project_root / "benchmark_results.json"
+    current_results: Dict[str, Any] = {"summary": {}, "detailed": {}}
+
+    if results_file.exists():
+        try:
+            with open(results_file, "r") as f:
+                current_results = json.load(f)
+            print(f"📂 Loaded existing results for {len(current_results.get('detailed', {}))} models")
+        except Exception as e:
+            print(f"⚠️ Could not load existing results: {e}")
+
+    current_results.setdefault("summary", {})
+    current_results.setdefault("detailed", {})
+    current_results["detailed"] = _normalize_detailed_entries(current_results["detailed"])
+    existing_results: Dict[str, Dict[str, Any]] = current_results["detailed"]
+
     for model_config in MODELS_TO_TEST:
         model_name = model_config["name"]
         print(f"\n{'='*80}")
         print(f"🧪 Testing Model: {model_name}")
         print(f"{'='*80}")
-        
-        try:
-            # Create chat model
-            chat_model = create_chat_model(model_config)
-            
-            # Run benchmarks
-            for idx, scenario in enumerate(tqdm(test_scenarios, desc=f"Benchmarking {model_name}")):
+
+        if overwrite:
+            current_results["summary"].pop(model_name, None)
+            existing_results[model_name] = {}
+            current_results["detailed"][model_name] = existing_results[model_name]
+        model_existing_results = existing_results.setdefault(model_name, {})
+
+        for seed in processed_seeds:
+            seed_key = str(seed)
+            existing_seed_entries = model_existing_results.get(seed_key, [])
+            if not overwrite and existing_seed_entries and len(existing_seed_entries) == len(test_scenarios):
+                print(f"⏭️  Skipping {model_name} @ seed {seed} - already completed ({len(existing_seed_entries)} scenarios)")
+                continue
+
+            set_all_seeds(seed)
+            print(f"\n⏱️  Running {model_name} @ seed {seed}")
+
+            try:
+                chat_model = create_chat_model(model_config)
+            except Exception as e:
+                print(f"\n❌ Failed to initialize model {model_name}: {e}")
+                break
+
+            seed_runs: List[BenchmarkTrajectory] = []
+            for idx, scenario in enumerate(tqdm(test_scenarios, desc=f"{model_name} (seed {seed})")):
                 try:
                     traj = await benchmark_rollout(
                         chat_model=chat_model,
                         model_name=model_name,
                         scenario=scenario,
                     )
-                    all_results[model_name].append(traj)
+                    seed_runs.append(traj)
                 except Exception as e:
                     print(f"\n⚠️ Error on scenario {scenario.id}: {e}")
-                    # Create a failed trajectory
                     failed_traj = BenchmarkTrajectory(
                         model_name=model_name,
                         scenario_id=str(scenario.id),
-                        metrics={"combined_score": 0.0, "macros_schema": 0.0, "provenance": 0.0, "strict_success": 0.0},
-                        metadata={"failure_reason": str(e)}
+                        metrics={
+                            "combined_score": 0.0,
+                            "macros_schema": 0.0,
+                            "provenance": 0.0,
+                            "strict_success": 0.0,
+                        },
+                        metadata={"failure_reason": str(e)},
                     )
-                    all_results[model_name].append(failed_traj)
-        
-        except Exception as e:
-            print(f"\n❌ Failed to initialize model {model_name}: {e}")
-            continue
-    
-    # Aggregate and report results
+                    seed_runs.append(failed_traj)
+
+            if not seed_runs:
+                print(f"⚠️ No trajectories recorded for {model_name} @ seed {seed}")
+                continue
+
+            seed_entries = [
+                {
+                    "scenario_id": traj.scenario_id,
+                    "metrics": traj.metrics,
+                    "metadata": traj.metadata,
+                    "seed": seed,
+                }
+                for traj in seed_runs
+            ]
+
+            current_results["detailed"].setdefault(model_name, {})[seed_key] = seed_entries
+            model_existing_results[seed_key] = seed_entries
+
+            seed_summary, seed_count = _aggregate_summary_entries({seed_key: seed_entries})
+            if seed_summary:
+                print(f"\n📊 Seed {seed} summary for {model_name} ({seed_count} scenarios):")
+                for metric_name, stats in sorted(seed_summary.items()):
+                    print(f"  {metric_name}: {stats['mean']:.4f} ± {stats['std']:.4f} (min: {stats['min']:.4f}, max: {stats['max']:.4f})")
+
+            aggregated_summary, aggregated_total = _aggregate_summary_entries(model_existing_results)
+            if aggregated_summary:
+                current_results["summary"][model_name] = aggregated_summary
+
+            try:
+                with open(results_file, "w") as f:
+                    json.dump(current_results, f, indent=2)
+                print(f"💾 Saved seed {seed} results for {model_name}")
+            except Exception as e:
+                print(f"⚠️ Failed to save results: {e}")
+
+        aggregated_summary, aggregated_total = _aggregate_summary_entries(model_existing_results)
+        if aggregated_summary:
+            print(f"\n📊 Aggregated results for {model_name} ({len(model_existing_results)} seeds, {aggregated_total} scenarios):")
+            for metric_name, stats in sorted(aggregated_summary.items()):
+                print(f"  {metric_name}: {stats['mean']:.4f} ± {stats['std']:.4f} (min: {stats['min']:.4f}, max: {stats['max']:.4f})")
+
     print("\n" + "=" * 80)
-    print("📊 BENCHMARK RESULTS")
+    print("📊 FINAL BENCHMARK RESULTS SUMMARY")
     print("=" * 80)
-    
-    summary = {}
-    for model_name, trajectories in all_results.items():
-        if not trajectories:
-            continue
-            
-        metrics_agg = defaultdict(list)
-        for traj in trajectories:
-            for metric_name, metric_value in traj.metrics.items():
-                metrics_agg[metric_name].append(metric_value)
-        
-        summary[model_name] = {
-            metric: {
-                "mean": sum(values) / len(values),
-                "std": (sum((v - sum(values)/len(values))**2 for v in values) / len(values))**0.5 if len(values) > 1 else 0.0,
-                "min": min(values),
-                "max": max(values),
-            }
-            for metric, values in metrics_agg.items()
-        }
-        
-        # Print per-model summary
+
+    final_summary: Dict[str, Any] = {}
+    if results_file.exists():
+        try:
+            with open(results_file, "r") as f:
+                final_data = json.load(f)
+                final_summary = final_data.get("summary", {})
+        except Exception:
+            final_summary = {}
+
+    if not final_summary:
+        for model_name, model_entries in current_results["detailed"].items():
+            model_summary, _ = _aggregate_summary_entries(model_entries)
+            if model_summary:
+                final_summary[model_name] = model_summary
+
+    for model_name, model_stats in final_summary.items():
         print(f"\n{model_name}:")
-        print(f"  Scenarios tested: {len(trajectories)}")
-        for metric_name, stats in summary[model_name].items():
+        for metric_name, stats in sorted(model_stats.items()):
             print(f"  {metric_name}: {stats['mean']:.4f} ± {stats['std']:.4f} (min: {stats['min']:.4f}, max: {stats['max']:.4f})")
-    
-    # Comparison table
+
     print("\n" + "=" * 80)
     print("📈 COMPARISON TABLE")
     print("=" * 80)
-    
-    if summary:
-        # Get all metrics
+
+    if final_summary:
         all_metrics = set()
-        for model_stats in summary.values():
+        for model_stats in final_summary.values():
             all_metrics.update(model_stats.keys())
-        
-        # Print header
+
         print(f"\n{'Model':<30}", end="")
         for metric in sorted(all_metrics):
             print(f"{metric:<20}", end="")
         print()
         print("-" * (30 + 20 * len(all_metrics)))
-        
-        # Print rows
-        for model_name, model_stats in summary.items():
+
+        for model_name, model_stats in sorted(final_summary.items()):
             print(f"{model_name:<30}", end="")
             for metric in sorted(all_metrics):
                 if metric in model_stats:
@@ -988,28 +1143,29 @@ async def run_benchmark():
                 else:
                     print(f"{'N/A':<20}", end="")
             print()
-    
-    # Save detailed results
-    results_file = project_root / "benchmark_results.json"
-    with open(results_file, "w") as f:
-        json.dump({
-            "summary": {k: v for k, v in summary.items()},
-            "detailed": {
-                model_name: [
-                    {
-                        "scenario_id": traj.scenario_id,
-                        "metrics": traj.metrics,
-                        "metadata": traj.metadata,
-                    }
-                    for traj in trajectories
-                ]
-                for model_name, trajectories in all_results.items()
-            }
-        }, f, indent=2)
-    
-    print(f"\n💾 Detailed results saved to: {results_file}")
+
+    print(f"\n💾 All results saved to: {results_file}")
     print("=" * 80)
 
 if __name__ == "__main__":
     import asyncio
-    asyncio.run(run_benchmark())
+
+    parser = argparse.ArgumentParser(description="Benchmark LLMs on fitness agent task")
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing results and rerun all models"
+    )
+    parser.add_argument(
+        "--seeds",
+        type=str,
+        default="42,123,456",
+        help="Comma-separated seeds to run for averaging (default: 42,123,456)",
+    )
+    args = parser.parse_args()
+
+    seed_values = [int(s.strip()) for s in args.seeds.split(",") if s.strip()]
+    if not seed_values:
+        seed_values = [SEED]
+
+    asyncio.run(run_benchmark(overwrite=args.overwrite, seeds=seed_values))

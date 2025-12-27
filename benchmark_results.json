@@ -1,0 +1,1648 @@
+{
+  "summary": {
+    "gpt-4o-mini": {
+      "combined_score": {
+        "mean": 0.3442929846769198,
+        "std": 0.32264232795511233,
+        "min": 0.0,
+        "max": 0.8177247204967453
+      },
+      "macros_schema": {
+        "mean": 0.3156305849162773,
+        "std": 0.3033296045754609,
+        "min": 0.0,
+        "max": 0.784571882653013
+      },
+      "provenance": {
+        "mean": 0.54,
+        "std": 0.4903060268852505,
+        "min": 0.0,
+        "max": 1.0
+      },
+      "strict_success": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "schema_reward": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "macro_reward": {
+        "mean": 0.43572184286241195,
+        "std": 0.1889332698396115,
+        "min": 0.1455470798261744,
+        "max": 0.7307148533162662
+      },
+      "banned_reward": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      }
+    },
+    "gpt-4o": {
+      "macros_schema": {
+        "mean": 0.4839742308272637,
+        "std": 0.2243852571035169,
+        "min": 0.0,
+        "max": 0.715082350490456
+      },
+      "provenance": {
+        "mean": 0.85,
+        "std": 0.3570714214271425,
+        "min": 0.0,
+        "max": 1.0
+      },
+      "schema_reward": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "macro_reward": {
+        "mean": 0.42867461621772623,
+        "std": 0.14135958814207386,
+        "min": 0.18669847392143446,
+        "max": 0.64385293811307
+      },
+      "banned_reward": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "strict_success": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "combined_score": {
+        "mean": 0.5390362889359261,
+        "std": 0.24040890700775594,
+        "min": 0.0,
+        "max": 0.75787977679186
+      }
+    },
+    "gpt-4-turbo": {
+      "macros_schema": {
+        "mean": 0.47094383387861044,
+        "std": 0.22797587746963402,
+        "min": 0.0,
+        "max": 0.8546953725510216
+      },
+      "provenance": {
+        "mean": 0.85,
+        "std": 0.3570714214271425,
+        "min": 0.0,
+        "max": 1.0
+      },
+      "schema_reward": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "macro_reward": {
+        "mean": 0.41001073878770455,
+        "std": 0.16340625396549935,
+        "min": 0.1184099629272114,
+        "max": 0.8062604967346954
+      },
+      "banned_reward": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "strict_success": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "combined_score": {
+        "mean": 0.5280156993796995,
+        "std": 0.24187161234692123,
+        "min": 0.0,
+        "max": 0.8773924701096396
+      }
+    },
+    "claude-3-5-sonnet-20241022": {
+      "combined_score": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "macros_schema": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "provenance": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "strict_success": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      }
+    },
+    "claude-3-opus-20240229": {
+      "macros_schema": {
+        "mean": 0.6190506404099492,
+        "std": 0.14385320771663535,
+        "min": 0.4040221278073655,
+        "max": 0.9105981290441354
+      },
+      "provenance": {
+        "mean": 0.99,
+        "std": 0.043588989435406726,
+        "min": 0.8,
+        "max": 1.0
+      },
+      "schema_reward": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "macro_reward": {
+        "mean": 0.4955483271410645,
+        "std": 0.19059659136490198,
+        "min": 0.20536283707648734,
+        "max": 0.8807975053921804
+      },
+      "banned_reward": {
+        "mean": 1.0,
+        "std": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "strict_success": {
+        "mean": 0.0,
+        "std": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "combined_score": {
+        "mean": 0.670119931757225,
+        "std": 0.12384051808078234,
+        "min": 0.4938778337261816,
+        "max": 0.9242860946262063
+      }
+    }
+  },
+  "detailed": {
+    "gpt-4o-mini": [
+      {
+        "scenario_id": "801",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "801",
+          "failure_reason": "no_final_answer"
+        }
+      },
+      {
+        "scenario_id": "802",
+        "metrics": {
+          "macros_schema": 0.6132643524109146,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.4843524698812194,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.6715496459250654
+        },
+        "metadata": {
+          "scenario_id": "802"
+        }
+      },
+      {
+        "scenario_id": "803",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "803",
+          "failure_reason": "no_final_answer"
+        }
+      },
+      {
+        "scenario_id": "804",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "804",
+          "failure_reason": "no_final_answer"
+        }
+      },
+      {
+        "scenario_id": "805",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "805",
+          "failure_reason": "no_final_answer"
+        }
+      },
+      {
+        "scenario_id": "806",
+        "metrics": {
+          "macros_schema": 0.5676902650700941,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.4235870200934587,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.6325080424245111
+        },
+        "metadata": {
+          "scenario_id": "806"
+        }
+      },
+      {
+        "scenario_id": "807",
+        "metrics": {
+          "macros_schema": 0.6884129467395621,
+          "provenance": 0.8,
+          "schema_reward": 1.0,
+          "macro_reward": 0.5845505956527495,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.6015861044278934
+        },
+        "metadata": {
+          "scenario_id": "807"
+        }
+      },
+      {
+        "scenario_id": "808",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "808",
+          "failure_reason": "no_final_answer"
+        }
+      },
+      {
+        "scenario_id": "809",
+        "metrics": {
+          "macros_schema": 0.625874106713277,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.5011654756177026,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.6824092060203956
+        },
+        "metadata": {
+          "scenario_id": "809"
+        }
+      },
+      {
+        "scenario_id": "810",
+        "metrics": {
+          "macros_schema": 0.784571882653013,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.7307148533162662,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.8177247204967453
+        },
+        "metadata": {
+          "scenario_id": "810"
+        }
+      },
+      {
+        "scenario_id": "811",
+        "metrics": {
+          "macros_schema": 0.46755063789153156,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.29006751718870877,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.5472720624332114
+        },
+        "metadata": {
+          "scenario_id": "811"
+        }
+      },
+      {
+        "scenario_id": "812",
+        "metrics": {
+          "macros_schema": 0.45288254538746203,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.270510060516616,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.5355492359891888
+        },
+        "metadata": {
+          "scenario_id": "812"
+        }
+      },
+      {
+        "scenario_id": "813",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "813",
+          "failure_reason": "no_final_answer"
+        }
+      },
+      {
+        "scenario_id": "814",
+        "metrics": {
+          "macros_schema": 0.35967981973406593,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.14623975964542124,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.4559987812324439
+        },
+        "metadata": {
+          "scenario_id": "814"
+        }
+      },
+      {
+        "scenario_id": "815",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "815",
+          "failure_reason": "no_final_answer"
+        }
+      },
+      {
+        "scenario_id": "816",
+        "metrics": {
+          "macros_schema": 0.3591603098696308,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.1455470798261744,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.45568790195742775
+        },
+        "metadata": {
+          "scenario_id": "816"
+        }
+      },
+      {
+        "scenario_id": "817",
+        "metrics": {
+          "macros_schema": 0.6915927991386539,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.5887903988515385,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.7385269330857896
+        },
+        "metadata": {
+          "scenario_id": "817"
+        }
+      },
+      {
+        "scenario_id": "818",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "818",
+          "failure_reason": "no_final_answer"
+        }
+      },
+      {
+        "scenario_id": "819",
+        "metrics": {
+          "macros_schema": 0.7019320327173411,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.6274150408966763,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.7470470595457246
+        },
+        "metadata": {
+          "scenario_id": "819"
+        }
+      },
+      {
+        "scenario_id": "820",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "820",
+          "failure_reason": "no_final_answer"
+        }
+      }
+    ],
+    "gpt-4o": [
+      {
+        "scenario_id": "801",
+        "metrics": {
+          "macros_schema": 0.6682550748954572,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.5576734331939428,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.7183406213332418
+        },
+        "metadata": {
+          "scenario_id": "801"
+        }
+      },
+      {
+        "scenario_id": "802",
+        "metrics": {
+          "macros_schema": 0.4726015387030042,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.29680205160400563,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.5519879341087638
+        },
+        "metadata": {
+          "scenario_id": "802"
+        }
+      },
+      {
+        "scenario_id": "803",
+        "metrics": {
+          "macros_schema": 0.48738533112837573,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.31651377483783427,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.5640040330928796
+        },
+        "metadata": {
+          "scenario_id": "803"
+        }
+      },
+      {
+        "scenario_id": "804",
+        "metrics": {
+          "macros_schema": 0.5582649334382395,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.4110199112509858,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.6247447114072289
+        },
+        "metadata": {
+          "scenario_id": "804"
+        }
+      },
+      {
+        "scenario_id": "805",
+        "metrics": {
+          "macros_schema": 0.5897311313324152,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.45297484177655345,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.6515421526339588
+        },
+        "metadata": {
+          "scenario_id": "805"
+        }
+      },
+      {
+        "scenario_id": "806",
+        "metrics": {
+          "macros_schema": 0.4001345704026821,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.20017942720357612,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.49024926315329964
+        },
+        "metadata": {
+          "scenario_id": "806"
+        }
+      },
+      {
+        "scenario_id": "807",
+        "metrics": {
+          "macros_schema": 0.714189610178854,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.6189194802384719,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.7575635958391751
+        },
+        "metadata": {
+          "scenario_id": "807"
+        }
+      },
+      {
+        "scenario_id": "808",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "808",
+          "failure_reason": "no_final_answer"
+        }
+      },
+      {
+        "scenario_id": "809",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "809",
+          "failure_reason": "no_final_answer"
+        }
+      },
+      {
+        "scenario_id": "810",
+        "metrics": {
+          "macros_schema": 0.715082350490456,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.64385293811307,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.75787977679186
+        },
+        "metadata": {
+          "scenario_id": "810"
+        }
+      },
+      {
+        "scenario_id": "811",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "811",
+          "failure_reason": "no_final_answer"
+        }
+      },
+      {
+        "scenario_id": "812",
+        "metrics": {
+          "macros_schema": 0.3900238554410758,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.18669847392143446,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.48113385075852194
+        },
+        "metadata": {
+          "scenario_id": "812"
+        }
+      },
+      {
+        "scenario_id": "813",
+        "metrics": {
+          "macros_schema": 0.5081657121413145,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.34422094952175264,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.5823912034636911
+        },
+        "metadata": {
+          "scenario_id": "813"
+        }
+      },
+      {
+        "scenario_id": "814",
+        "metrics": {
+          "macros_schema": 0.4840502486262838,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.31206699816837846,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.5620596052595784
+        },
+        "metadata": {
+          "scenario_id": "814"
+        }
+      },
+      {
+        "scenario_id": "815",
+        "metrics": {
+          "macros_schema": 0.6521322605713079,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.5361763474284105,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.7044563885456059
+        },
+        "metadata": {
+          "scenario_id": "815"
+        }
+      },
+      {
+        "scenario_id": "816",
+        "metrics": {
+          "macros_schema": 0.5365260152673066,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.38203468702307547,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.6064921508769201
+        },
+        "metadata": {
+          "scenario_id": "816"
+        }
+      },
+      {
+        "scenario_id": "817",
+        "metrics": {
+          "macros_schema": 0.5584911099042233,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.4113214798722978,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.6251220114016978
+        },
+        "metadata": {
+          "scenario_id": "817"
+        }
+      },
+      {
+        "scenario_id": "818",
+        "metrics": {
+          "macros_schema": 0.5555738878368199,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.40743185044909314,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.6220380729116055
+        },
+        "metadata": {
+          "scenario_id": "818"
+        }
+      },
+      {
+        "scenario_id": "819",
+        "metrics": {
+          "macros_schema": 0.7070498058177517,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.6338122572721895,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.7512638123813886
+        },
+        "metadata": {
+          "scenario_id": "819"
+        }
+      },
+      {
+        "scenario_id": "820",
+        "metrics": {
+          "macros_schema": 0.6818271803697062,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.5757695738262748,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.7294565947591057
+        },
+        "metadata": {
+          "scenario_id": "820"
+        }
+      }
+    ],
+    "gpt-4-turbo": [
+      {
+        "scenario_id": "801",
+        "metrics": {
+          "macros_schema": 0.7394492101742971,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.6525989468990627,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.7793458296982977
+        },
+        "metadata": {
+          "scenario_id": "801"
+        }
+      },
+      {
+        "scenario_id": "802",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "802",
+          "failure_reason": "no_final_answer"
+        }
+      },
+      {
+        "scenario_id": "803",
+        "metrics": {
+          "macros_schema": 0.6484144260355668,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.5312192347140889,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.701205987376198
+        },
+        "metadata": {
+          "scenario_id": "803"
+        }
+      },
+      {
+        "scenario_id": "804",
+        "metrics": {
+          "macros_schema": 0.5512154741953098,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.401620632260413,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.6188911336717551
+        },
+        "metadata": {
+          "scenario_id": "804"
+        }
+      },
+      {
+        "scenario_id": "805",
+        "metrics": {
+          "macros_schema": 0.5379537617303366,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.38393834897378215,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.6072561471266271
+        },
+        "metadata": {
+          "scenario_id": "805"
+        }
+      },
+      {
+        "scenario_id": "806",
+        "metrics": {
+          "macros_schema": 0.5005984232870297,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.33413123104937303,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.5752111208541261
+        },
+        "metadata": {
+          "scenario_id": "806"
+        }
+      },
+      {
+        "scenario_id": "807",
+        "metrics": {
+          "macros_schema": 0.8546953725510216,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.8062604967346954,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.8773924701096396
+        },
+        "metadata": {
+          "scenario_id": "807"
+        }
+      },
+      {
+        "scenario_id": "808",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "808",
+          "failure_reason": "no_final_answer"
+        }
+      },
+      {
+        "scenario_id": "809",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "809",
+          "failure_reason": "no_final_answer"
+        }
+      },
+      {
+        "scenario_id": "810",
+        "metrics": {
+          "macros_schema": 0.5413253329169534,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.42665666614619174,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.6102208237402635
+        },
+        "metadata": {
+          "scenario_id": "810"
+        }
+      },
+      {
+        "scenario_id": "811",
+        "metrics": {
+          "macros_schema": 0.4276891304625092,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.23691884061667895,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.513774511806294
+        },
+        "metadata": {
+          "scenario_id": "811"
+        }
+      },
+      {
+        "scenario_id": "812",
+        "metrics": {
+          "macros_schema": 0.38549333556599236,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.18065778075465644,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.4778630412505997
+        },
+        "metadata": {
+          "scenario_id": "812"
+        }
+      },
+      {
+        "scenario_id": "813",
+        "metrics": {
+          "macros_schema": 0.6794769411850078,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.5726359215800103,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.727456318198484
+        },
+        "metadata": {
+          "scenario_id": "813"
+        }
+      },
+      {
+        "scenario_id": "814",
+        "metrics": {
+          "macros_schema": 0.4870004009591231,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.31600053461216415,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.5641550192347909
+        },
+        "metadata": {
+          "scenario_id": "814"
+        }
+      },
+      {
+        "scenario_id": "815",
+        "metrics": {
+          "macros_schema": 0.5888685205112267,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.45182469401496883,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.6511947270922078
+        },
+        "metadata": {
+          "scenario_id": "815"
+        }
+      },
+      {
+        "scenario_id": "816",
+        "metrics": {
+          "macros_schema": 0.3388074721954086,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.1184099629272114,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.43807822495123977
+        },
+        "metadata": {
+          "scenario_id": "816"
+        }
+      },
+      {
+        "scenario_id": "817",
+        "metrics": {
+          "macros_schema": 0.5091787342491827,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.3455716456655769,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.5827038837609642
+        },
+        "metadata": {
+          "scenario_id": "817"
+        }
+      },
+      {
+        "scenario_id": "818",
+        "metrics": {
+          "macros_schema": 0.5087266700193396,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.34496889335911934,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.5830665794399679
+        },
+        "metadata": {
+          "scenario_id": "818"
+        }
+      },
+      {
+        "scenario_id": "819",
+        "metrics": {
+          "macros_schema": 0.5185107955466477,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.39813849443330956,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.5908658063079357
+        },
+        "metadata": {
+          "scenario_id": "819"
+        }
+      },
+      {
+        "scenario_id": "820",
+        "metrics": {
+          "macros_schema": 0.6014726759872557,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.4686302346496741,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.6616323629745976
+        },
+        "metadata": {
+          "scenario_id": "820"
+        }
+      }
+    ],
+    "claude-3-5-sonnet-20241022": [
+      {
+        "scenario_id": "801",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "801",
+          "failure_reason": "Error code: 404 - {'type': 'error', 'error': {'type': 'not_found_error', 'message': 'model: claude-3-5-sonnet-20241022'}, 'request_id': 'req_011CVsR8mDAK5Gfb9amy1TuA'}"
+        }
+      },
+      {
+        "scenario_id": "802",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "802",
+          "failure_reason": "Error code: 404 - {'type': 'error', 'error': {'type': 'not_found_error', 'message': 'model: claude-3-5-sonnet-20241022'}, 'request_id': 'req_011CVsR8oqRHa1skGBYv8X9M'}"
+        }
+      },
+      {
+        "scenario_id": "803",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "803",
+          "failure_reason": "Error code: 404 - {'type': 'error', 'error': {'type': 'not_found_error', 'message': 'model: claude-3-5-sonnet-20241022'}, 'request_id': 'req_011CVsR8py8NKHBaJFxcmv7H'}"
+        }
+      },
+      {
+        "scenario_id": "804",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "804",
+          "failure_reason": "Error code: 404 - {'type': 'error', 'error': {'type': 'not_found_error', 'message': 'model: claude-3-5-sonnet-20241022'}, 'request_id': 'req_011CVsR8tPkxQ2aLTfhU7Gpk'}"
+        }
+      },
+      {
+        "scenario_id": "805",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "805",
+          "failure_reason": "Error code: 404 - {'type': 'error', 'error': {'type': 'not_found_error', 'message': 'model: claude-3-5-sonnet-20241022'}, 'request_id': 'req_011CVsR8uK4xeytfCCi5Zb4F'}"
+        }
+      },
+      {
+        "scenario_id": "806",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "806",
+          "failure_reason": "Error code: 404 - {'type': 'error', 'error': {'type': 'not_found_error', 'message': 'model: claude-3-5-sonnet-20241022'}, 'request_id': 'req_011CVsR8vXVYnjh4Poex2gFE'}"
+        }
+      },
+      {
+        "scenario_id": "807",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "807",
+          "failure_reason": "Error code: 404 - {'type': 'error', 'error': {'type': 'not_found_error', 'message': 'model: claude-3-5-sonnet-20241022'}, 'request_id': 'req_011CVsR8wT4PkycMmYHhBLuS'}"
+        }
+      },
+      {
+        "scenario_id": "808",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "808",
+          "failure_reason": "Error code: 404 - {'type': 'error', 'error': {'type': 'not_found_error', 'message': 'model: claude-3-5-sonnet-20241022'}, 'request_id': 'req_011CVsR8xnRZjkiRFGA4qRef'}"
+        }
+      },
+      {
+        "scenario_id": "809",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "809",
+          "failure_reason": "Error code: 404 - {'type': 'error', 'error': {'type': 'not_found_error', 'message': 'model: claude-3-5-sonnet-20241022'}, 'request_id': 'req_011CVsR8ygzg9SHN16WMjR8k'}"
+        }
+      },
+      {
+        "scenario_id": "810",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "810",
+          "failure_reason": "Error code: 404 - {'type': 'error', 'error': {'type': 'not_found_error', 'message': 'model: claude-3-5-sonnet-20241022'}, 'request_id': 'req_011CVsR8zZ62BLMjDs18QiuD'}"
+        }
+      },
+      {
+        "scenario_id": "811",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "811",
+          "failure_reason": "Error code: 404 - {'type': 'error', 'error': {'type': 'not_found_error', 'message': 'model: claude-3-5-sonnet-20241022'}, 'request_id': 'req_011CVsR923dZ95bfE7EPTj2f'}"
+        }
+      },
+      {
+        "scenario_id": "812",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "812",
+          "failure_reason": "Error code: 404 - {'type': 'error', 'error': {'type': 'not_found_error', 'message': 'model: claude-3-5-sonnet-20241022'}, 'request_id': 'req_011CVsR92xCxPYu45aw2gsBK'}"
+        }
+      },
+      {
+        "scenario_id": "813",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "813",
+          "failure_reason": "Error code: 404 - {'type': 'error', 'error': {'type': 'not_found_error', 'message': 'model: claude-3-5-sonnet-20241022'}, 'request_id': 'req_011CVsR941TAYk9yoU6ZRfsE'}"
+        }
+      },
+      {
+        "scenario_id": "814",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "814",
+          "failure_reason": "Error code: 404 - {'type': 'error', 'error': {'type': 'not_found_error', 'message': 'model: claude-3-5-sonnet-20241022'}, 'request_id': 'req_011CVsR95NZBaYrV6yykLnX5'}"
+        }
+      },
+      {
+        "scenario_id": "815",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "815",
+          "failure_reason": "Error code: 404 - {'type': 'error', 'error': {'type': 'not_found_error', 'message': 'model: claude-3-5-sonnet-20241022'}, 'request_id': 'req_011CVsR96FdxNuRSpac9rh51'}"
+        }
+      },
+      {
+        "scenario_id": "816",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "816",
+          "failure_reason": "Error code: 404 - {'type': 'error', 'error': {'type': 'not_found_error', 'message': 'model: claude-3-5-sonnet-20241022'}, 'request_id': 'req_011CVsR97DS6Ym8VfZqxtZeN'}"
+        }
+      },
+      {
+        "scenario_id": "817",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "817",
+          "failure_reason": "Error code: 404 - {'type': 'error', 'error': {'type': 'not_found_error', 'message': 'model: claude-3-5-sonnet-20241022'}, 'request_id': 'req_011CVsR989EvwBkYAXhCEEZz'}"
+        }
+      },
+      {
+        "scenario_id": "818",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "818",
+          "failure_reason": "Error code: 404 - {'type': 'error', 'error': {'type': 'not_found_error', 'message': 'model: claude-3-5-sonnet-20241022'}, 'request_id': 'req_011CVsR995Z34RXnDAfNjdUB'}"
+        }
+      },
+      {
+        "scenario_id": "819",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "819",
+          "failure_reason": "Error code: 404 - {'type': 'error', 'error': {'type': 'not_found_error', 'message': 'model: claude-3-5-sonnet-20241022'}, 'request_id': 'req_011CVsR99vtyKSrT4rzpGP3y'}"
+        }
+      },
+      {
+        "scenario_id": "820",
+        "metrics": {
+          "combined_score": 0.0,
+          "macros_schema": 0.0,
+          "provenance": 0.0,
+          "strict_success": 0.0
+        },
+        "metadata": {
+          "scenario_id": "820",
+          "failure_reason": "Error code: 404 - {'type': 'error', 'error': {'type': 'not_found_error', 'message': 'model: claude-3-5-sonnet-20241022'}, 'request_id': 'req_011CVsR9AxuTA3Xrb34Dmj8P'}"
+        }
+      }
+    ],
+    "claude-3-opus-20240229": [
+      {
+        "scenario_id": "801",
+        "metrics": {
+          "macros_schema": 0.6457332820250796,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.5276443760334394,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.6992893829410785
+        },
+        "metadata": {
+          "scenario_id": "801"
+        }
+      },
+      {
+        "scenario_id": "802",
+        "metrics": {
+          "macros_schema": 0.5270377995397133,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.3693837327196178,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.5977097089155086
+        },
+        "metadata": {
+          "scenario_id": "802"
+        }
+      },
+      {
+        "scenario_id": "803",
+        "metrics": {
+          "macros_schema": 0.8346401897468012,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.7795202529957348,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.8597861665726126
+        },
+        "metadata": {
+          "scenario_id": "803"
+        }
+      },
+      {
+        "scenario_id": "804",
+        "metrics": {
+          "macros_schema": 0.550985146531374,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.40131352870849857,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.6185643701755282
+        },
+        "metadata": {
+          "scenario_id": "804"
+        }
+      },
+      {
+        "scenario_id": "805",
+        "metrics": {
+          "macros_schema": 0.7689475131715615,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.6919300175620818,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.8043272948755946
+        },
+        "metadata": {
+          "scenario_id": "805"
+        }
+      },
+      {
+        "scenario_id": "806",
+        "metrics": {
+          "macros_schema": 0.4980466611250544,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.3307288815000725,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.5732123364466541
+        },
+        "metadata": {
+          "scenario_id": "806"
+        }
+      },
+      {
+        "scenario_id": "807",
+        "metrics": {
+          "macros_schema": 0.9105981290441354,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.8807975053921804,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.9242860946262063
+        },
+        "metadata": {
+          "scenario_id": "807"
+        }
+      },
+      {
+        "scenario_id": "808",
+        "metrics": {
+          "macros_schema": 0.5623007212235567,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.4164009616314087,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.6282309429783348
+        },
+        "metadata": {
+          "scenario_id": "808"
+        }
+      },
+      {
+        "scenario_id": "809",
+        "metrics": {
+          "macros_schema": 0.4040221278073655,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.20536283707648734,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.4938778337261816
+        },
+        "metadata": {
+          "scenario_id": "809"
+        }
+      },
+      {
+        "scenario_id": "810",
+        "metrics": {
+          "macros_schema": 0.47899232852129825,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.3487404106516228,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.5576528313723392
+        },
+        "metadata": {
+          "scenario_id": "810"
+        }
+      },
+      {
+        "scenario_id": "811",
+        "metrics": {
+          "macros_schema": 0.45488434697421426,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.2731791292989524,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.5365486134643921
+        },
+        "metadata": {
+          "scenario_id": "811"
+        }
+      },
+      {
+        "scenario_id": "812",
+        "metrics": {
+          "macros_schema": 0.5064989763384921,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.34199863511798934,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.5809386921851892
+        },
+        "metadata": {
+          "scenario_id": "812"
+        }
+      },
+      {
+        "scenario_id": "813",
+        "metrics": {
+          "macros_schema": 0.6587775606871169,
+          "provenance": 0.8,
+          "schema_reward": 1.0,
+          "macro_reward": 0.5450367475828225,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.5814192639243473
+        },
+        "metadata": {
+          "scenario_id": "813"
+        }
+      },
+      {
+        "scenario_id": "814",
+        "metrics": {
+          "macros_schema": 0.481428222954215,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.30857096393895334,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.5593219237680563
+        },
+        "metadata": {
+          "scenario_id": "814"
+        }
+      },
+      {
+        "scenario_id": "815",
+        "metrics": {
+          "macros_schema": 0.7184374524301889,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.6245832699069185,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.7612987127778357
+        },
+        "metadata": {
+          "scenario_id": "815"
+        }
+      },
+      {
+        "scenario_id": "816",
+        "metrics": {
+          "macros_schema": 0.45379887456756157,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.2717318327567488,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.5362653619977517
+        },
+        "metadata": {
+          "scenario_id": "816"
+        }
+      },
+      {
+        "scenario_id": "817",
+        "metrics": {
+          "macros_schema": 0.8346097899381779,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.7794797199175705,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.8601411775104844
+        },
+        "metadata": {
+          "scenario_id": "817"
+        }
+      },
+      {
+        "scenario_id": "818",
+        "metrics": {
+          "macros_schema": 0.69437783645767,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.5925037819435599,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.7408988148973656
+        },
+        "metadata": {
+          "scenario_id": "818"
+        }
+      },
+      {
+        "scenario_id": "819",
+        "metrics": {
+          "macros_schema": 0.685614088806942,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.6070176110086775,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.7333703231509334
+        },
+        "metadata": {
+          "scenario_id": "819"
+        }
+      },
+      {
+        "scenario_id": "820",
+        "metrics": {
+          "macros_schema": 0.7112817603084653,
+          "provenance": 1.0,
+          "schema_reward": 1.0,
+          "macro_reward": 0.6150423470779538,
+          "banned_reward": 1.0,
+          "strict_success": 0.0,
+          "combined_score": 0.7552587888381045
+        },
+        "metadata": {
+          "scenario_id": "820"
+        }
+      }
+    ]
+  }
+}
