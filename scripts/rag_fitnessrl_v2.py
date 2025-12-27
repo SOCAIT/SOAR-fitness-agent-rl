@@ -676,7 +676,7 @@ async def main():
         engine_args=art.dev.EngineArgs(
             # enforce_eager=ENFORCE_EAGER,
             gpu_memory_utilization=GPU_MEMORY_UTILIZATION,
-            tensor_parallel_size=actual_tp_size,
+            #tensor_parallel_size=actual_tp_size,
         ),
     )
     
