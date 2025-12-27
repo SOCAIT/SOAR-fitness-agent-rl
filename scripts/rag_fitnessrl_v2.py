@@ -38,29 +38,29 @@ import sys
 # Prevents "torch.cuda.MemPool doesn't currently support expandable_segments" error
 os.environ.setdefault('PYTORCH_CUDA_ALLOC_CONF', 'expandable_segments:False')
 
-# Import unsloth early to ensure it's fully initialized before vLLM spawns workers
-# This prevents circular import errors during multiprocessing worker initialization
-# The import must happen before any transformers/trl/peft imports
-try:
-    import unsloth  # noqa: F401
+# # Import unsloth early to ensure it's fully initialized before vLLM spawns workers
+# # This prevents circular import errors during multiprocessing worker initialization
+# # The import must happen before any transformers/trl/peft imports
+# try:
+#     import unsloth  # noqa: F401
     
-    # Patch torch.cuda.MemPool to handle expandable_segments gracefully
-    # This fixes "torch.cuda.MemPool doesn't currently support expandable_segments" error
-    # Must be done after importing unsloth but before vLLM initializes
-    import torch
-    if hasattr(torch.cuda, 'MemPool'):
-        _original_mempool_init = torch.cuda.MemPool.__init__
-        def _patched_mempool_init(self, *args, **kwargs):
-            # Remove expandable_segments if present, as PyTorch 2.7.1 doesn't support it
-            if 'expandable_segments' in kwargs:
-                kwargs.pop('expandable_segments')
-            return _original_mempool_init(self, *args, **kwargs)
-        torch.cuda.MemPool.__init__ = _patched_mempool_init
-except ImportError:
-    pass  # Unsloth may not be available, but that's okay
-except Exception as e:
-    print(f"⚠️  Warning: Could not patch MemPool (this is usually fine): {e}")
-    pass
+#     # Patch torch.cuda.MemPool to handle expandable_segments gracefully
+#     # This fixes "torch.cuda.MemPool doesn't currently support expandable_segments" error
+#     # Must be done after importing unsloth but before vLLM initializes
+#     import torch
+#     if hasattr(torch.cuda, 'MemPool'):
+#         _original_mempool_init = torch.cuda.MemPool.__init__
+#         def _patched_mempool_init(self, *args, **kwargs):
+#             # Remove expandable_segments if present, as PyTorch 2.7.1 doesn't support it
+#             if 'expandable_segments' in kwargs:
+#                 kwargs.pop('expandable_segments')
+#             return _original_mempool_init(self, *args, **kwargs)
+#         torch.cuda.MemPool.__init__ = _patched_mempool_init
+# except ImportError:
+#     pass  # Unsloth may not be available, but that's okay
+# except Exception as e:
+#     print(f"⚠️  Warning: Could not patch MemPool (this is usually fine): {e}")
+#     pass
 import json
 import math
 import re
