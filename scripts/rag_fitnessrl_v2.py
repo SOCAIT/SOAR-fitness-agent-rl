@@ -186,10 +186,8 @@ print(f"Created a list of {len(scenarios_list)} Scenario objects.")
 # MODEL CONFIG
 # ============================================================================
 
-BASE_MODEL_NAME = "Qwen/Qwen2.5-14B-Instruct"
-MODEL_NAME = "fitness-agent-langgraph-14B-qwen2.5-005"
-PROJECT_NAME = "fitness-agent-langgraph-rag-v2"
-SEED = 42
+# Model configuration is set at the top of the file (lines 22-24)
+# BASE_MODEL_NAME, MODEL_NAME, and PROJECT_NAME are already defined above
 
 model = None
 backend = None
@@ -596,6 +594,41 @@ async def main():
     global model, backend
     set_all_seeds(SEED)
     
+    # Check GPU availability and verify tensor parallel size
+    import torch
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA is not available. This script requires GPU support.")
+    
+    num_gpus = torch.cuda.device_count()
+    print(f"🔍 Detected {num_gpus} GPU(s)")
+    
+    # Check CUDA_VISIBLE_DEVICES
+    cuda_visible = os.environ.get("CUDA_VISIBLE_DEVICES")
+    if cuda_visible:
+        print(f"📌 CUDA_VISIBLE_DEVICES={cuda_visible}")
+        # Verify the number matches
+        visible_count = len([x for x in cuda_visible.split(",") if x.strip()])
+        if visible_count != num_gpus:
+            print(f"⚠️  Warning: CUDA_VISIBLE_DEVICES specifies {visible_count} device(s) but PyTorch sees {num_gpus}")
+    
+    # Print GPU memory info
+    for i in range(num_gpus):
+        props = torch.cuda.get_device_properties(i)
+        memory_gb = props.total_memory / (1024**3)
+        print(f"   GPU {i}: {props.name} ({memory_gb:.1f} GB)")
+    
+    # Use actual GPU count if TENSOR_PARALLEL_SIZE exceeds available GPUs
+    actual_tp_size = min(TENSOR_PARALLEL_SIZE, num_gpus)
+    if TENSOR_PARALLEL_SIZE > num_gpus:
+        print(f"⚠️  Warning: TENSOR_PARALLEL_SIZE ({TENSOR_PARALLEL_SIZE}) exceeds available GPUs ({num_gpus}). Using {actual_tp_size} GPUs.")
+    
+    if actual_tp_size < TENSOR_PARALLEL_SIZE:
+        print(f"📊 Using tensor_parallel_size={actual_tp_size} (requested {TENSOR_PARALLEL_SIZE})")
+    
+    print(f"🤖 Initializing model: {MODEL_NAME}")
+    print(f"   Base model: {BASE_MODEL_NAME}")
+    print(f"   Project: {PROJECT_NAME}")
+    
     model = art.TrainableModel(
         name=MODEL_NAME, 
         project=PROJECT_NAME,
@@ -603,7 +636,7 @@ async def main():
         )
     
     # Configure tensor parallelization for multi-GPU support
-    import torch
+    print(f"⚙️  Configuring model with tensor_parallel_size={actual_tp_size}")
     model._internal_config = art.dev.InternalModelConfig(
         init_args=art.dev.InitArgs(
             max_seq_length=MAX_SEQ_LENGTH,
@@ -611,12 +644,25 @@ async def main():
         engine_args=art.dev.EngineArgs(
             enforce_eager=ENFORCE_EAGER,
             gpu_memory_utilization=GPU_MEMORY_UTILIZATION,
-            tensor_parallel_size=TENSOR_PARALLEL_SIZE,
+            tensor_parallel_size=actual_tp_size,
         ),
     )
     
+    print("🔧 Initializing backend...")
     backend = LocalBackend(in_process=True, path="./.art")
-    await model.register(backend)
+    
+    print("📝 Registering model with backend (this may take a moment)...")
+    try:
+        await model.register(backend)
+        print("✅ Model registered successfully!")
+    except Exception as e:
+        print(f"❌ Error during model registration: {e}")
+        print(f"💡 Troubleshooting tips:")
+        print(f"   - Verify you have {actual_tp_size} GPU(s) available")
+        print(f"   - Check GPU memory: nvidia-smi")
+        print(f"   - Try reducing GPU_MEMORY_UTILIZATION from {GPU_MEMORY_UTILIZATION} to 0.6")
+        print(f"   - Try reducing tensor_parallel_size to 1 for single GPU")
+        raise
     
     if os.getenv("WANDB_API_KEY"):
         weave.init(model.project, settings={"print_call_link": False})
