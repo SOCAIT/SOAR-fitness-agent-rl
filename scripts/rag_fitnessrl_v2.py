@@ -19,12 +19,12 @@ PREREQUISITES:
 
 ## CONFIGURATION
 
-BASE_MODEL_NAME = "Qwen/Qwen2.5-32B-Instruct"
-MODEL_NAME = "fitness-agent-langgraph-32B-qwen2.5-001"
+BASE_MODEL_NAME = "Qwen/Qwen2.5-14B-Instruct"
+MODEL_NAME = "fitness-agent-langgraph-14B-qwen2.5-001"
 PROJECT_NAME = "fitness-agent-langgraph-rag-v2"
 SEED = 42
-TENSOR_PARALLEL_SIZE = 2
-GPU_MEMORY_UTILIZATION = 0.80
+TENSOR_PARALLEL_SIZE = 1
+GPU_MEMORY_UTILIZATION = 0.75
 MAX_SEQ_LENGTH = 8192
 ENFORCE_EAGER = True
 
