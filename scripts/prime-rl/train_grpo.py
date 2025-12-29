@@ -969,9 +969,12 @@ def main():
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
         print(f"   Set pad_token to eos_token: {tokenizer.pad_token}")
-    else:
-        print(f"   Pad token already set: {tokenizer.pad_token} (ID: {tokenizer.pad_token_id})")
-        print(f"   EOS token: {tokenizer.eos_token} (ID: {tokenizer.eos_token_id})")
+    
+    # CRITICAL: Set padding side to left for generation
+    # GRPOTrainer performs generation, so left padding is required to ensure
+    # the model sees the prompt at the end of the sequence.
+    tokenizer.padding_side = "left"
+    print(f"   Set padding_side to '{tokenizer.padding_side}'")
     
     # Load dataset
     print("\n📦 Loading dataset...")
@@ -1096,6 +1099,14 @@ def main():
         if "query" in sample:
             print(f"   Query length: {len(sample['query'])} chars")
             print(f"   Query preview: {sample['query'][:300]}...")
+            
+            # Verify tokenization of the sample
+            print(f"   Tokenizing first sample query...")
+            tokens = tokenizer(sample['query'], add_special_tokens=False)
+            print(f"   Token IDs length: {len(tokens['input_ids'])}")
+            print(f"   First 10 Token IDs: {tokens['input_ids'][:10]}")
+            print(f"   Last 10 Token IDs: {tokens['input_ids'][-10:]}")
+            
         if "prompt" in sample:
             print(f"   Prompt length: {len(sample['prompt'])} chars")
         if "info" in sample:
