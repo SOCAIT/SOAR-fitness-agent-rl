@@ -43,6 +43,9 @@ import verifiers as vf
 # TRL for GRPO training
 from trl import GRPOTrainer, GRPOConfig
 
+# Transformers for callbacks
+from transformers import TrainerCallback
+
 # PEFT for LoRA
 from peft import LoraConfig, TaskType
 
@@ -89,6 +92,130 @@ MAX_TURNS = 15
 # W&B LOGGING UTILITIES
 # ============================================================================
 
+class CompletionLogger:
+    """Logs LLM completions for qualitative analysis."""
+    
+    def __init__(self, log_dir: Path, log_to_wandb: bool = True):
+        self.log_dir = log_dir
+        self.log_to_wandb = log_to_wandb
+        self.completions_file = log_dir / "completions.jsonl"
+        self.completions_file.parent.mkdir(parents=True, exist_ok=True)
+        self.sample_completions = []  # Store samples for W&B
+        self.max_samples = 50  # Keep last N samples for W&B
+        
+    def log_completions(
+        self, 
+        step: int,
+        completions: List[str],
+        prompts: List[str] = None,
+        rewards: List[float] = None,
+        infos: List[Dict] = None,
+    ):
+        """Log completions to file and W&B."""
+        if not completions:
+            return
+        
+        # Save to JSONL file
+        with open(self.completions_file, "a", encoding="utf-8") as f:
+            for i, completion in enumerate(completions):
+                record = {
+                    "step": step,
+                    "completion": completion,
+                    "reward": rewards[i] if rewards else None,
+                    "prompt_preview": prompts[i][:200] if prompts and i < len(prompts) else None,
+                    "scenario_id": infos[i].get("scenario_id") if infos and i < len(infos) else None,
+                    "timestamp": datetime.now().isoformat(),
+                }
+                f.write(json.dumps(record) + "\n")
+        
+        # Store samples for W&B (keep last N)
+        for i, completion in enumerate(completions[:3]):  # Log first 3 per batch
+            sample = {
+                "step": step,
+                "completion": completion[:1000],  # Truncate for W&B
+                "reward": rewards[i] if rewards and i < len(rewards) else None,
+                "scenario_id": infos[i].get("scenario_id") if infos and i < len(infos) else None,
+            }
+            self.sample_completions.append(sample)
+            
+            # Keep only last N samples
+            if len(self.sample_completions) > self.max_samples:
+                self.sample_completions.pop(0)
+        
+        # Print example to console every N steps
+        if step % 10 == 0 and completions:
+            print(f"\n{'='*80}")
+            print(f"📝 Sample Completion at Step {step}")
+            print(f"{'='*80}")
+            print(f"Reward: {rewards[0] if rewards else 'N/A'}")
+            if infos and infos[0]:
+                print(f"Scenario ID: {infos[0].get('scenario_id', 'N/A')}")
+            print(f"\nCompletion Preview (first 500 chars):")
+            print("-" * 80)
+            print(completions[0][:500])
+            print("..." if len(completions[0]) > 500 else "")
+            print(f"{'='*80}\n")
+    
+    def log_to_wandb(self, step: int):
+        """Log sample completions to W&B as a table."""
+        if not self.log_to_wandb or not USE_WANDB or wandb.run is None:
+            return
+        
+        if not self.sample_completions:
+            return
+        
+        # Create W&B table
+        table = wandb.Table(columns=["step", "scenario_id", "reward", "completion"])
+        for sample in self.sample_completions[-20:]:  # Last 20 samples
+            table.add_data(
+                sample["step"],
+                sample.get("scenario_id", "N/A"),
+                sample.get("reward", 0.0),
+                sample["completion"],
+            )
+        
+        wandb.log({"train/completions": table}, step=step)
+
+
+class GRPOTrainingCallback(TrainerCallback):
+    """Callback to ensure proper W&B logging during GRPO training."""
+    
+    def __init__(self, custom_logger, completion_logger: CompletionLogger = None):
+        self.custom_logger = custom_logger
+        self.completion_logger = completion_logger
+        self.last_logged_step = -1
+    
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        """Called when trainer logs metrics - Transformers handles W&B logging automatically.
+        
+        This callback is mainly for debugging and ensuring consistency.
+        With report_to="wandb", Transformers logs metrics with global_step automatically.
+        """
+        global _current_step
+        
+        if logs is None or not USE_WANDB or wandb.run is None:
+            return
+        
+        # Get the current global step (cumulative across all epochs)
+        global_step = state.global_step if hasattr(state, 'global_step') else 0
+        _current_step = global_step  # Update global step for reward function
+        
+        # Transformers automatically logs via report_to="wandb" with global_step
+        # We don't need to log again, but we can verify what's being logged
+        if global_step > self.last_logged_step:
+            self.last_logged_step = global_step
+            
+            # Log completions to W&B periodically
+            if self.completion_logger and global_step % 10 == 0:
+                self.completion_logger.log_to_wandb(global_step)
+            
+            # Debug: print what Transformers is logging
+            if global_step <= 5:
+                print(f"📊 Trainer logged at global_step {global_step}: {list(logs.keys())}")
+                # Note: Transformers logs these with step=global_step automatically
+                # Metrics include: loss, learning_rate, grad_norm, epoch, etc.
+
+
 class FitnessAgentWandbLogger:
     """Custom W&B logger for fitness agent training."""
     
@@ -118,8 +245,9 @@ class FitnessAgentWandbLogger:
         )
         
         # Define custom metrics for better visualization
-        wandb.define_metric("train/step")
-        wandb.define_metric("train/*", step_metric="train/step")
+        # Use global_step as the primary step metric (matches Transformers default)
+        wandb.define_metric("train/global_step")
+        wandb.define_metric("train/*", step_metric="train/global_step")
         wandb.define_metric("eval/step")
         wandb.define_metric("eval/*", step_metric="eval/step")
         wandb.define_metric("rollout/step")
@@ -607,6 +735,10 @@ def load_fitness_dataset() -> Dataset:
 # REWARD FUNCTION FOR TRL
 # ============================================================================
 
+# Global completion logger (set in main())
+_completion_logger: Optional[CompletionLogger] = None
+_current_step: int = 0
+
 def fitness_reward(completions: List[str], prompts: List[str] = None, **kwargs) -> List[float]:
     """
     Compute rewards for a batch of completions.
@@ -620,6 +752,8 @@ def fitness_reward(completions: List[str], prompts: List[str] = None, **kwargs) 
     Returns:
         List of reward values
     """
+    global _completion_logger, _current_step
+    
     rewards = []
     infos = kwargs.get("infos", [{}] * len(completions))
     
@@ -640,6 +774,20 @@ def fitness_reward(completions: List[str], prompts: List[str] = None, **kwargs) 
         total = 0.2 * r_schema + 0.5 * r_macros + 0.15 * r_variety + 0.15 * r_banned
         rewards.append(total)
     
+    # Log completions if logger is available
+    if _completion_logger is not None:
+        prompt_strings = [
+            json.dumps(p) if isinstance(p, (list, dict)) else str(p) 
+            for p in (prompts or [])
+        ]
+        _completion_logger.log_completions(
+            step=_current_step,
+            completions=completions,
+            prompts=prompt_strings,
+            rewards=rewards,
+            infos=infos,
+        )
+    
     return rewards
 
 
@@ -656,7 +804,8 @@ def main():
     print(f"W&B Logging: {'Enabled' if USE_WANDB else 'Disabled'}")
     print("=" * 80)
     
-    # Initialize W&B logger
+    # Initialize W&B logger BEFORE creating trainer
+    # This ensures the trainer's built-in W&B logging uses our run
     wandb_logger = FitnessAgentWandbLogger(config={
         "model": MODEL_NAME,
         "max_turns": MAX_TURNS,
@@ -668,6 +817,25 @@ def main():
         "gradient_accumulation_steps": 16,
     })
     wandb_run = wandb_logger.init_run()
+    
+    # Initialize completion logger for qualitative analysis
+    output_dir = Path("./outputs/prime-rl-fitness")
+    completion_logger = CompletionLogger(
+        log_dir=output_dir,
+        log_to_wandb=USE_WANDB,
+    )
+    global _completion_logger
+    _completion_logger = completion_logger
+    
+    print(f"\n📝 Completion logging enabled:")
+    print(f"   - Completions saved to: {completion_logger.completions_file}")
+    print(f"   - W&B table: train/completions (updated every 10 steps)")
+    print(f"   - Console preview: every 10 steps")
+    
+    # Ensure W&B is initialized for trainer
+    if USE_WANDB:
+        # Set environment variable so trainer uses existing run
+        os.environ["WANDB_RUN_ID"] = str(wandb.run.id) if wandb.run else ""
     
     # Load dataset
     print("\n📦 Loading dataset...")
@@ -752,6 +920,7 @@ def main():
         train_dataset=dataset,
         args=training_config,
         peft_config=peft_config,            # Enable LoRA
+        callbacks=[GRPOTrainingCallback(wandb_logger, completion_logger)] if USE_WANDB else None,
     )
     
     # Train with logging
