@@ -1013,39 +1013,29 @@ def main():
     
     training_config = GRPOConfig(
         output_dir="./outputs/prime-rl-fitness",
-        num_train_epochs=1, # Reduced for faster feedback loop
+        num_train_epochs=1,
         
-        # Memory-efficient settings (adjusted for model size)
+        # --- 1. DISABLE VLLM ---
+        use_vllm=False,
+        
+        # --- 2. CRITICAL: ENABLE SAMPLING ---
+        # Without these, the model uses "greedy decoding" which leads to 
+        # infinite loops and "strange" repetitive text.
+        temperature=0.9,          # Essential for RL exploration (0.6 - 0.9 is good)
+        do_sample=True,           # Must be True for GRPO
+        
+        # --- Standard Memory Settings ---
         per_device_train_batch_size=batch_size,
         gradient_accumulation_steps=grad_accum,
-        
-        # GRPO specific - reduce generations for memory
         num_generations=num_gens,
         max_completion_length=max_comp_len,
-        
-        # Mixed precision for memory savings
-        bf16=USE_BF16,                          # Use bf16 on Ampere+ GPUs
-        
-        # Gradient checkpointing saves memory (CRITICAL for 32B)
+        bf16=USE_BF16,
         gradient_checkpointing=True,
-        gradient_checkpointing_kwargs={"use_reentrant": False}, # Optimization from working example
-        
-        # Learning rate
-        learning_rate=1e-5, # Match working example
+        learning_rate=1e-5,
         warmup_ratio=0.1,
-        
-        # Logging
         logging_steps=1,
-        save_steps=100,
         report_to="wandb" if USE_WANDB else "none",
         run_name=RUN_NAME,
-        
-        # Reduce memory fragmentation
-        dataloader_pin_memory=False,
-        
-        # vLLM Optimization (Critical for generation quality/speed)
-        use_vllm=True,
-        vllm_gpu_memory_utilization=0.3, # Allocate 30% to vLLM, rest to training
     )
     
     print("   Memory-efficient settings enabled:")
