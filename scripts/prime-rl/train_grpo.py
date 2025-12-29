@@ -41,10 +41,7 @@ from pydantic import BaseModel
 import verifiers as vf
 
 # TRL for GRPO training
-from trl import GRPOConfig, GRPOTrainer
-
-# Transformers
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from trl import GRPOTrainer, GRPOConfig
 
 # Pinecone
 from pinecone import Pinecone
@@ -607,22 +604,28 @@ def load_fitness_dataset() -> Dataset:
 # REWARD FUNCTION FOR TRL
 # ============================================================================
 
-def compute_reward(prompts, completions, **kwargs) -> List[float]:
+def fitness_reward(completions: List[str], prompts: List[str] = None, **kwargs) -> List[float]:
     """
     Compute rewards for a batch of completions.
     This is called by GRPOTrainer during training.
+    
+    Args:
+        completions: List of model-generated completions (strings)
+        prompts: List of prompts (optional)
+        **kwargs: Additional info including 'infos' list
+    
+    Returns:
+        List of reward values
     """
     rewards = []
+    infos = kwargs.get("infos", [{}] * len(completions))
     
-    for prompt, completion in zip(prompts, completions):
-        # Extract info from prompt (stored in kwargs or parsed from prompt)
-        info = kwargs.get("info", {})
+    for i, completion in enumerate(completions):
+        info = infos[i] if i < len(infos) else {}
+        prompt = prompts[i] if prompts and i < len(prompts) else ""
         
         # Parse completion as messages
-        if isinstance(completion, str):
-            completion_msgs = [{"role": "assistant", "content": completion}]
-        else:
-            completion_msgs = completion
+        completion_msgs = [{"role": "assistant", "content": completion}]
         
         # Calculate individual rewards
         r_schema = reward_schema(prompt, completion_msgs, info)
@@ -650,43 +653,12 @@ def main():
     print(f"W&B Logging: {'Enabled' if USE_WANDB else 'Disabled'}")
     print("=" * 80)
     
-    # Training configuration
-    training_config = GRPOConfig(
-        # Model
-        model_name_or_path=MODEL_NAME,
-        
-        # Training
-        num_train_epochs=3,
-        per_device_train_batch_size=4,
-        gradient_accumulation_steps=4,
-        learning_rate=1e-5,
-        warmup_ratio=0.1,
-        
-        # GRPO specific
-        num_generations=4,  # Rollouts per prompt
-        max_completion_length=2048,
-        temperature=0.7,
-        
-        # Logging
-        logging_steps=1,
-        save_steps=100,
-        output_dir="./outputs/prime-rl-fitness",
-        
-        # W&B logging
-        report_to="wandb" if USE_WANDB else "none",
-        run_name=RUN_NAME,
-    )
-    
     # Initialize W&B logger
     wandb_logger = FitnessAgentWandbLogger(config={
-        "num_train_epochs": training_config.num_train_epochs,
-        "per_device_train_batch_size": training_config.per_device_train_batch_size,
-        "gradient_accumulation_steps": training_config.gradient_accumulation_steps,
-        "learning_rate": training_config.learning_rate,
-        "warmup_ratio": training_config.warmup_ratio,
-        "num_generations": training_config.num_generations,
-        "max_completion_length": training_config.max_completion_length,
-        "temperature": training_config.temperature,
+        "model": MODEL_NAME,
+        "max_turns": MAX_TURNS,
+        "num_generations": 4,
+        "max_completion_length": 2048,
     })
     wandb_run = wandb_logger.init_run()
     
@@ -698,27 +670,28 @@ def main():
     if USE_WANDB and wandb.run:
         wandb.config.update({"dataset_size": len(dataset)})
     
-    # Load model and tokenizer
-    print("\n🤖 Loading model and tokenizer...")
-    model = AutoModelForCausalLM.from_pretrained(
-        MODEL_NAME,
-        torch_dtype="auto",
-        device_map="auto",
-        trust_remote_code=True,
-    )
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
-    
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    
-    # Create GRPO Trainer
+    # Create GRPO Trainer with simple API
+    # See: https://huggingface.co/docs/trl/main/en/grpo_trainer
     print("\n🏋️ Creating GRPO Trainer...")
+    
+    # Training config (optional - uses defaults if not provided)
+    training_config = GRPOConfig(
+        output_dir="./outputs/prime-rl-fitness",
+        num_train_epochs=3,
+        per_device_train_batch_size=4,
+        gradient_accumulation_steps=4,
+        learning_rate=1e-5,
+        logging_steps=1,
+        save_steps=100,
+        report_to="wandb" if USE_WANDB else "none",
+        run_name=RUN_NAME,
+    )
+    
     trainer = GRPOTrainer(
-        config=training_config,
-        model=model,
-        tokenizer=tokenizer,
+        model=MODEL_NAME,
+        reward_funcs=fitness_reward,
         train_dataset=dataset,
-        reward_funcs=compute_reward,
+        args=training_config,
     )
     
     # Train with logging
@@ -731,7 +704,7 @@ def main():
         # Log final metrics
         final_metrics = {
             "total_steps": trainer.state.global_step if hasattr(trainer, 'state') else 0,
-            "epochs_completed": training_config.num_train_epochs,
+            "epochs_completed": 3,
         }
         wandb_logger.log_final_summary(final_metrics)
         
@@ -758,12 +731,12 @@ def main():
     # Log model as artifact
     if USE_WANDB:
         wandb_logger.log_model_checkpoint(
-            training_config.output_dir, 
+            "./outputs/prime-rl-fitness", 
             trainer.state.global_step if hasattr(trainer, 'state') else 0
         )
     
     print("\n✅ Training complete!")
-    print(f"   Model saved to: {training_config.output_dir}")
+    print(f"   Model saved to: ./outputs/prime-rl-fitness")
     if wandb_run:
         print(f"   W&B run: {wandb_run.url}")
 
