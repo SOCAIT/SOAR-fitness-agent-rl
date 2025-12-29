@@ -17,8 +17,11 @@ The `verifiers` library provides a clean abstraction for:
 ## Installation
 
 ```bash
-# Install verifiers with training extras
-pip install verifiers[train]
+# Install verifiers (for environments and rubrics)
+pip install verifiers
+
+# Install trl for GRPO training
+pip install trl
 
 # Install vLLM for inference
 pip install vllm
