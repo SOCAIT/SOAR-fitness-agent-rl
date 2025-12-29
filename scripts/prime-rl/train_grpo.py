@@ -971,20 +971,6 @@ def main():
     from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
     
-    # Critical: Set pad_token to eos_token if not set, or ensuring consistency for generation
-    # Qwen 2.5 has distinct pad/eos, but for training, aligning them can prevent generation issues
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-        print(f"   Set pad_token to eos_token: {tokenizer.pad_token}")
-    
-    # CRITICAL: Set padding side to left for generation
-    # GRPOTrainer performs generation, so left padding is required to ensure
-    # the model sees the prompt at the end of the sequence.
-    # Note: vLLM handles this internally, but good for safety if vLLM fails to load
-    tokenizer.padding_side = "left" 
-    tokenizer.model_max_length = training_config.max_completion_length + 512 # Set max length explicitly
-    print(f"   Set padding_side to '{tokenizer.padding_side}'")
-    
     # Load dataset
     print("\n📦 Loading dataset...")
     dataset = load_fitness_dataset(tokenizer=tokenizer)
@@ -1135,6 +1121,20 @@ def main():
             print(f"   Prompt length: {len(sample['prompt'])} chars")
         if "info" in sample:
             print(f"   Info keys: {list(sample['info'].keys())}")
+    
+    # Critical: Set pad_token to eos_token if not set, or ensuring consistency for generation
+    # Qwen 2.5 has distinct pad/eos, but for training, aligning them can prevent generation issues
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+        print(f"   Set pad_token to eos_token: {tokenizer.pad_token}")
+    
+    # CRITICAL: Set padding side to left for generation
+    # GRPOTrainer performs generation, so left padding is required to ensure
+    # the model sees the prompt at the end of the sequence.
+    # Note: vLLM handles this internally, but good for safety if vLLM fails to load
+    tokenizer.padding_side = "left" 
+    tokenizer.model_max_length = training_config.max_completion_length + 512 # Set max length explicitly
+    print(f"   Set padding_side to '{tokenizer.padding_side}'")
     
     trainer = GRPOTrainer(
         model=MODEL_NAME,
