@@ -982,7 +982,7 @@ def main():
     # the model sees the prompt at the end of the sequence.
     # Note: vLLM handles this internally, but good for safety if vLLM fails to load
     tokenizer.padding_side = "left" 
-    tokenizer.model_max_length = training_args.max_completion_length + 512 # Set max length explicitly
+    tokenizer.model_max_length = training_config.max_completion_length + 512 # Set max length explicitly
     print(f"   Set padding_side to '{tokenizer.padding_side}'")
     
     # Load dataset
