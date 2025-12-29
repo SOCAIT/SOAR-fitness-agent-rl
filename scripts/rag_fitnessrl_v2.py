@@ -28,6 +28,16 @@ GPU_MEMORY_UTILIZATION = 0.75
 MAX_SEQ_LENGTH = 8192
 ENFORCE_EAGER = True
 
+# TRAINING CONFIGURATION
+TRAINING_GROUPS_PER_STEP = 2
+TRAINING_NUM_EPOCHS = 3
+TRAINING_ROLLOUTS_PER_GROUP = 8
+TRAINING_LEARNING_RATE = 1e-5
+TRAINING_MAX_STEPS = 150
+TRAINING_VALIDATION_EVERY = 10
+TRAINING_VALIDATION_SAMPLES = 10
+
+
 # Import unsloth FIRST before any other ML libraries to avoid circular import issues
 # This is critical for tensor parallelism with vLLM worker spawning
 import os
@@ -557,7 +567,7 @@ class FitnessScenario(BaseModel):
     step: int
     scenario: Scenario
 
-@weave.op
+@weave.op  # Disabled due to token usage validation errors with local vLLM
 async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> ProjectTrajectory:
     scenario = fitness_scenario.scenario
     traj = ProjectTrajectory(
@@ -706,6 +716,7 @@ async def main():
         print(f"   - Try reducing tensor_parallel_size to 1 for single GPU")
         raise
     
+    # Note: Weave logging disabled due to token usage validation errors with local vLLM
     if os.getenv("WANDB_API_KEY"):
         weave.init(model.project, settings={"print_call_link": False})
 
@@ -714,8 +725,10 @@ async def main():
 
     training_iterator = iterate_dataset(
         [s for s in scenarios_list if s.split == "train"],
-        groups_per_step=2,
-        num_epochs=3,
+        groups_per_step=TRAINING_GROUPS_PER_STEP,
+        rollouts_per_group=TRAINING_ROLLOUTS_PER_GROUP,
+        num_epochs=TRAINING_NUM_EPOCHS,
+        max_steps=TRAINING_MAX_STEPS,
         initial_step=await model.get_step()
     )
     
