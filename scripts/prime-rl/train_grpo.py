@@ -72,6 +72,9 @@ os.chdir(project_root)
 if not os.environ.get("PINECONE_API_KEY"):
     raise ValueError("PINECONE_API_KEY is required")
 
+# OPTIMIZATION: Set memory allocation limits to prevent fragmentation
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:128'
+
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
@@ -82,6 +85,10 @@ if not os.environ.get("PINECONE_API_KEY"):
 # - "Qwen/Qwen2.5-32B-Instruct" - ~65-75GB with LoRA on 80GB GPU (tight fit!)
 MODEL_NAME = "Qwen/Qwen2.5-14B-Instruct"
 # Note: vLLM is NOT needed for training - only for separate evaluation script
+
+# Training Configuration
+USE_LORA = True  # Set to False to debug base model behavior
+USE_BF16 = True  # Set to False if using older GPUs (V100/T4) or experiencing NaNs
 
 # W&B configuration
 WANDB_PROJECT = "fitness-agent-prime-rl-002"
@@ -973,7 +980,9 @@ def main():
     # CRITICAL: Set padding side to left for generation
     # GRPOTrainer performs generation, so left padding is required to ensure
     # the model sees the prompt at the end of the sequence.
-    tokenizer.padding_side = "left"
+    # Note: vLLM handles this internally, but good for safety if vLLM fails to load
+    tokenizer.padding_side = "left" 
+    tokenizer.model_max_length = training_args.max_completion_length + 512 # Set max length explicitly
     print(f"   Set padding_side to '{tokenizer.padding_side}'")
     
     # Load dataset
@@ -1010,15 +1019,15 @@ def main():
         max_comp_len = 512  # Shorter completions
         lora_rank = 8    # Lower rank for 32B
     else:
-        batch_size = 1
-        grad_accum = 16
-        num_gens = 2
-        max_comp_len = 1024
+        batch_size = 4   # Increased from 1 based on working example
+        grad_accum = 4   # Adjusted for batch size 4
+        num_gens = 4     # Increased group size for better RL signal
+        max_comp_len = 512 # Reduced slightly to fit larger batch
         lora_rank = 16
     
     training_config = GRPOConfig(
         output_dir="./outputs/prime-rl-fitness",
-        num_train_epochs=3,
+        num_train_epochs=1, # Reduced for faster feedback loop
         
         # Memory-efficient settings (adjusted for model size)
         per_device_train_batch_size=batch_size,
@@ -1029,13 +1038,14 @@ def main():
         max_completion_length=max_comp_len,
         
         # Mixed precision for memory savings
-        bf16=True,                          # Use bf16 on Ampere+ GPUs
+        bf16=USE_BF16,                          # Use bf16 on Ampere+ GPUs
         
         # Gradient checkpointing saves memory (CRITICAL for 32B)
         gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False}, # Optimization from working example
         
         # Learning rate
-        learning_rate=1e-5,
+        learning_rate=1e-5, # Match working example
         warmup_ratio=0.1,
         
         # Logging
@@ -1046,6 +1056,14 @@ def main():
         
         # Reduce memory fragmentation
         dataloader_pin_memory=False,
+        
+        # vLLM Optimization (Critical for generation quality/speed)
+        use_vllm=True,
+        vllm_init_kwargs={
+            "gpu_memory_utilization": 0.3, # Allocate 30% to vLLM, rest to training
+            "dtype": "bfloat16" if USE_BF16 else "float16",
+            "max_model_len": max_comp_len + 512, # buffer for prompt
+        },
     )
     
     print("   Memory-efficient settings enabled:")
@@ -1059,28 +1077,34 @@ def main():
     # Adjust rank based on model size (lower rank = less memory for 32B)
     lora_alpha = lora_rank * 2  # Standard: alpha = 2 * rank
     
-    peft_config = LoraConfig(
-        r=lora_rank,
-        lora_alpha=lora_alpha,
-        lora_dropout=0.05,
-        target_modules=[                    # Modules to apply LoRA to
-            "q_proj",
-            "k_proj", 
-            "v_proj",
-            "o_proj",
-            "gate_proj",
-            "up_proj",
-            "down_proj",
-        ],
-        task_type=TaskType.CAUSAL_LM,
-        bias="none",
-    )
-    
-    print("   LoRA configuration:")
-    print(f"   - Rank (r): {peft_config.r}")
-    print(f"   - Alpha: {peft_config.lora_alpha}")
-    print(f"   - Target modules: {len(peft_config.target_modules)} layers")
-    print(f"   - Trainable params: ~0.1% of full model")
+    if USE_LORA:
+        peft_config = LoraConfig(
+            r=lora_rank,
+            lora_alpha=lora_alpha,
+            lora_dropout=0.05,
+            target_modules=[                    # Modules to apply LoRA to
+                "q_proj",
+                "k_proj", 
+                "v_proj",
+                "o_proj",
+                "gate_proj",
+                "up_proj",
+                "down_proj",
+                "down_proj",
+            ],
+            task_type=TaskType.CAUSAL_LM,
+            bias="none",
+        )
+        
+        print("   LoRA configuration:")
+        print(f"   - Rank (r): {peft_config.r}")
+        print(f"   - Alpha: {peft_config.lora_alpha}")
+        print(f"   - Target modules: {len(peft_config.target_modules)} layers")
+        print(f"   - Trainable params: ~0.1% of full model")
+    else:
+        print("\n⚠️  LoRA DISABLED - Training full model (High Memory Usage!)")
+        print("   Note: This is intended for debugging or full fine-tuning on large clusters.")
+        peft_config = None
     
     if is_32b:
         print("\n   ⚠️  32B Model Memory Estimate:")
