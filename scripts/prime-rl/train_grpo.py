@@ -77,6 +77,9 @@ if not os.environ.get("PINECONE_API_KEY"):
 # ============================================================================
 
 # Model configuration
+# Options:
+# - "Qwen/Qwen2.5-14B-Instruct" - ~20-30GB with LoRA on 80GB GPU
+# - "Qwen/Qwen2.5-32B-Instruct" - ~65-75GB with LoRA on 80GB GPU (tight fit!)
 MODEL_NAME = "Qwen/Qwen2.5-14B-Instruct"
 # Note: vLLM is NOT needed for training - only for separate evaluation script
 
@@ -115,24 +118,54 @@ class CompletionLogger:
         if not completions:
             return
         
+        # Ensure completions are strings (not lists or other formats)
+        completion_strings = []
+        for comp in completions:
+            if isinstance(comp, str):
+                completion_strings.append(comp)
+            elif isinstance(comp, list):
+                # Extract content from message list
+                content_parts = []
+                for msg in comp:
+                    if isinstance(msg, dict):
+                        content_parts.append(msg.get("content", ""))
+                    else:
+                        content_parts.append(str(msg))
+                completion_strings.append("\n".join(filter(None, content_parts)))
+            elif isinstance(comp, dict):
+                completion_strings.append(comp.get("content", str(comp)))
+            else:
+                completion_strings.append(str(comp))
+        
         # Save to JSONL file
         with open(self.completions_file, "a", encoding="utf-8") as f:
-            for i, completion in enumerate(completions):
+            for i, completion_str in enumerate(completion_strings):
+                # Get prompt preview
+                prompt_preview = None
+                if prompts and i < len(prompts):
+                    prompt_val = prompts[i]
+                    if isinstance(prompt_val, str):
+                        prompt_preview = prompt_val[:200]
+                    elif isinstance(prompt_val, (list, dict)):
+                        prompt_preview = json.dumps(prompt_val)[:200]
+                    else:
+                        prompt_preview = str(prompt_val)[:200]
+                
                 record = {
                     "step": step,
-                    "completion": completion,
-                    "reward": rewards[i] if rewards else None,
-                    "prompt_preview": prompts[i][:200] if prompts and i < len(prompts) else None,
+                    "completion": completion_str,  # Always store as string
+                    "reward": rewards[i] if rewards and i < len(rewards) else None,
+                    "prompt_preview": prompt_preview,
                     "scenario_id": infos[i].get("scenario_id") if infos and i < len(infos) else None,
                     "timestamp": datetime.now().isoformat(),
                 }
-                f.write(json.dumps(record) + "\n")
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
         
         # Store samples for W&B (keep last N)
-        for i, completion in enumerate(completions[:3]):  # Log first 3 per batch
+        for i, completion_str in enumerate(completion_strings[:3]):  # Log first 3 per batch
             sample = {
                 "step": step,
-                "completion": completion[:1000],  # Truncate for W&B
+                "completion": completion_str[:1000],  # Truncate for W&B
                 "reward": rewards[i] if rewards and i < len(rewards) else None,
                 "scenario_id": infos[i].get("scenario_id") if infos and i < len(infos) else None,
             }
@@ -143,7 +176,7 @@ class CompletionLogger:
                 self.sample_completions.pop(0)
         
         # Print example to console every N steps
-        if step % 10 == 0 and completions:
+        if step % 10 == 0 and completion_strings:
             print(f"\n{'='*80}")
             print(f"📝 Sample Completion at Step {step}")
             print(f"{'='*80}")
@@ -152,8 +185,8 @@ class CompletionLogger:
                 print(f"Scenario ID: {infos[0].get('scenario_id', 'N/A')}")
             print(f"\nCompletion Preview (first 500 chars):")
             print("-" * 80)
-            print(completions[0][:500])
-            print("..." if len(completions[0]) > 500 else "")
+            print(completion_strings[0][:500])
+            print("..." if len(completion_strings[0]) > 500 else "")
             print(f"{'='*80}\n")
     
     def log_to_wandb(self, step: int):
@@ -694,9 +727,25 @@ def reward_no_banned(prompt, completion, info) -> float:
 
 def load_fitness_dataset() -> Dataset:
     """Load and prepare the fitness scenarios dataset."""
+    from transformers import AutoTokenizer
+    
     dataset_path = project_root / "data" / "fitness_scenarios.jsonl"
     if not dataset_path.exists():
         raise FileNotFoundError(f"Dataset not found at {dataset_path}")
+    
+    # Load tokenizer to format prompts correctly
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
+        if tokenizer.chat_template is None:
+            print("⚠️  Warning: Tokenizer has no chat_template, using default format")
+            use_chat_template = False
+        else:
+            use_chat_template = True
+    except Exception as e:
+        print(f"⚠️  Warning: Could not load tokenizer: {e}")
+        print("   Using simple string format instead")
+        use_chat_template = False
+        tokenizer = None
     
     raw_dataset = load_dataset("json", data_files=str(dataset_path))["train"]
     
@@ -705,10 +754,28 @@ def load_fitness_dataset() -> Dataset:
         one_day_prompt = "generate a one day meal plan for user that match its macros and diet"
         question = f"{one_day_prompt} Context: {json.dumps(context)}"
         
-        prompt = [
+        # Build chat messages
+        messages = [
             {"role": "system", "content": PLANNER_SYSTEM_PROMPT},
             {"role": "user", "content": question}
         ]
+        
+        # Format prompt using tokenizer's chat template if available
+        if use_chat_template and tokenizer:
+            try:
+                # Apply chat template to convert messages to string
+                prompt_text = tokenizer.apply_chat_template(
+                    messages, 
+                    tokenize=False, 
+                    add_generation_prompt=True
+                )
+            except Exception as e:
+                print(f"⚠️  Warning: Chat template failed: {e}, using simple format")
+                # Fallback: simple string format
+                prompt_text = f"{PLANNER_SYSTEM_PROMPT}\n\nUser: {question}\n\nAssistant:"
+        else:
+            # Fallback: simple string format
+            prompt_text = f"{PLANNER_SYSTEM_PROMPT}\n\nUser: {question}\n\nAssistant:"
         
         info = {
             "daily_cal_target": context.get("daily_cal_target"),
@@ -719,14 +786,24 @@ def load_fitness_dataset() -> Dataset:
             "scenario_id": example["id"],
         }
         
+        # GRPOTrainer can accept either:
+        # 1. String prompts (formatted text)
+        # 2. List of messages (will be formatted by trainer)
+        # We'll use string format to ensure proper generation
         return {
-            "prompt": prompt,
+            "prompt": prompt_text,  # String format for reliable generation
+            "prompt_messages": messages,  # Keep original for reference
             "info": info,
             "task": "nutrition_planning",
         }
     
     train_examples = [ex for ex in raw_dataset if ex.get("split") == "train"]
     processed = [process_example(ex) for ex in train_examples]
+    
+    print(f"✅ Processed {len(processed)} examples")
+    if processed:
+        print(f"   Sample prompt length: {len(processed[0]['prompt'])} chars")
+        print(f"   Sample prompt preview: {processed[0]['prompt'][:200]}...")
     
     return Dataset.from_list(processed)
 
@@ -745,7 +822,7 @@ def fitness_reward(completions: List[str], prompts: List[str] = None, **kwargs) 
     This is called by GRPOTrainer during training.
     
     Args:
-        completions: List of model-generated completions (strings)
+        completions: List of model-generated completions (strings or list of messages)
         prompts: List of prompts (optional)
         **kwargs: Additional info including 'infos' list
     
@@ -757,12 +834,42 @@ def fitness_reward(completions: List[str], prompts: List[str] = None, **kwargs) 
     rewards = []
     infos = kwargs.get("infos", [{}] * len(completions))
     
+    # Convert completions to strings if they're in message format
+    # GRPOTrainer may pass completions as strings or as lists of messages
+    completion_strings = []
     for i, completion in enumerate(completions):
+        if isinstance(completion, str):
+            completion_strings.append(completion)
+        elif isinstance(completion, list):
+            # Extract text from message list format
+            text_parts = []
+            for msg in completion:
+                if isinstance(msg, dict):
+                    content = msg.get("content", "")
+                    if content:
+                        text_parts.append(content)
+                else:
+                    text_parts.append(str(msg))
+            completion_strings.append("\n".join(text_parts))
+        elif isinstance(completion, dict):
+            # Single message dict
+            completion_strings.append(completion.get("content", str(completion)))
+        else:
+            # Fallback: convert to string
+            completion_str = str(completion)
+            completion_strings.append(completion_str)
+            
+            # Debug: warn about unexpected format
+            if _current_step <= 2:
+                print(f"⚠️  Warning: Unexpected completion type at step {_current_step}: {type(completion)}")
+                print(f"   First 200 chars: {completion_str[:200]}")
+    
+    for i, completion_str in enumerate(completion_strings):
         info = infos[i] if i < len(infos) else {}
         prompt = prompts[i] if prompts and i < len(prompts) else ""
         
-        # Parse completion as messages
-        completion_msgs = [{"role": "assistant", "content": completion}]
+        # Parse completion as messages for reward functions
+        completion_msgs = [{"role": "assistant", "content": completion_str}]
         
         # Calculate individual rewards
         r_schema = reward_schema(prompt, completion_msgs, info)
@@ -774,7 +881,7 @@ def fitness_reward(completions: List[str], prompts: List[str] = None, **kwargs) 
         total = 0.2 * r_schema + 0.5 * r_macros + 0.15 * r_variety + 0.15 * r_banned
         rewards.append(total)
     
-    # Log completions if logger is available
+    # Log completions if logger is available (use string versions)
     if _completion_logger is not None:
         prompt_strings = [
             json.dumps(p) if isinstance(p, (list, dict)) else str(p) 
@@ -782,7 +889,7 @@ def fitness_reward(completions: List[str], prompts: List[str] = None, **kwargs) 
         ]
         _completion_logger.log_completions(
             step=_current_step,
-            completions=completions,
+            completions=completion_strings,  # Use converted strings
             prompts=prompt_strings,
             rewards=rewards,
             infos=infos,
@@ -842,6 +949,16 @@ def main():
     dataset = load_fitness_dataset()
     print(f"   Loaded {len(dataset)} training examples")
     
+    # Verify dataset format
+    if len(dataset) > 0:
+        sample = dataset[0]
+        print(f"\n   Dataset sample keys: {list(sample.keys())}")
+        if "prompt" in sample:
+            prompt_preview = str(sample["prompt"])[:300]
+            print(f"   Sample prompt preview: {prompt_preview}...")
+        if "info" in sample:
+            print(f"   Sample info keys: {list(sample['info'].keys())}")
+    
     if USE_WANDB and wandb.run:
         wandb.config.update({"dataset_size": len(dataset)})
     
@@ -850,23 +967,39 @@ def main():
     print("\n🏋️ Creating GRPO Trainer...")
     
     # Memory-efficient training config
-    # For 14B model on 80GB GPU, use small batches + gradient accumulation
+    # Automatically adjust for model size
+    is_32b = "32B" in MODEL_NAME or "32b" in MODEL_NAME
+    
+    if is_32b:
+        print("⚠️  32B model detected - using ultra memory-efficient settings")
+        batch_size = 1
+        grad_accum = 32  # Higher accumulation for 32B
+        num_gens = 1     # Single generation per prompt
+        max_comp_len = 512  # Shorter completions
+        lora_rank = 8    # Lower rank for 32B
+    else:
+        batch_size = 1
+        grad_accum = 16
+        num_gens = 2
+        max_comp_len = 1024
+        lora_rank = 16
+    
     training_config = GRPOConfig(
         output_dir="./outputs/prime-rl-fitness",
         num_train_epochs=3,
         
-        # Memory-efficient settings
-        per_device_train_batch_size=1,      # Small batch for large model
-        gradient_accumulation_steps=16,     # Accumulate for effective batch of 16
+        # Memory-efficient settings (adjusted for model size)
+        per_device_train_batch_size=batch_size,
+        gradient_accumulation_steps=grad_accum,
         
         # GRPO specific - reduce generations for memory
-        num_generations=2,                  # Reduced from 4
-        max_completion_length=1024,         # Reduced from 2048
+        num_generations=num_gens,
+        max_completion_length=max_comp_len,
         
         # Mixed precision for memory savings
         bf16=True,                          # Use bf16 on Ampere+ GPUs
         
-        # Gradient checkpointing saves memory
+        # Gradient checkpointing saves memory (CRITICAL for 32B)
         gradient_checkpointing=True,
         
         # Learning rate
@@ -881,20 +1014,26 @@ def main():
         
         # Reduce memory fragmentation
         dataloader_pin_memory=False,
+        
+        # Additional memory optimizations for 32B
+        max_length=2048 if not is_32b else 1024,  # Shorter context for 32B
     )
     
     print("   Memory-efficient settings enabled:")
-    print(f"   - Batch size: 1 (effective: 16 with grad accum)")
+    print(f"   - Batch size: {batch_size} (effective: {batch_size * grad_accum} with grad accum)")
     print(f"   - Gradient checkpointing: enabled")
     print(f"   - Mixed precision: bf16")
-    print(f"   - Num generations: 2")
+    print(f"   - Num generations: {num_gens}")
+    print(f"   - Max completion length: {max_comp_len}")
     
     # LoRA configuration for parameter-efficient training
-    # This drastically reduces memory usage by only training ~0.1% of parameters
+    # Adjust rank based on model size (lower rank = less memory for 32B)
+    lora_alpha = lora_rank * 2  # Standard: alpha = 2 * rank
+    
     peft_config = LoraConfig(
-        r=16,                               # LoRA rank (higher = more capacity, more memory)
-        lora_alpha=32,                      # LoRA alpha (scaling factor)
-        lora_dropout=0.05,                  # Dropout for regularization
+        r=lora_rank,
+        lora_alpha=lora_alpha,
+        lora_dropout=0.05,
         target_modules=[                    # Modules to apply LoRA to
             "q_proj",
             "k_proj", 
@@ -913,6 +1052,15 @@ def main():
     print(f"   - Alpha: {peft_config.lora_alpha}")
     print(f"   - Target modules: {len(peft_config.target_modules)} layers")
     print(f"   - Trainable params: ~0.1% of full model")
+    
+    if is_32b:
+        print("\n   ⚠️  32B Model Memory Estimate:")
+        print("   - Base model (BF16): ~64GB")
+        print("   - LoRA weights: ~50MB")
+        print("   - Optimizer states: ~100MB")
+        print("   - Activations (with checkpointing): ~10-15GB")
+        print("   - Total: ~75-80GB (tight fit!)")
+        print("   - Recommendation: Monitor GPU memory closely")
     
     trainer = GRPOTrainer(
         model=MODEL_NAME,
