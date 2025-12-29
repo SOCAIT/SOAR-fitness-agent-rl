@@ -725,27 +725,27 @@ def reward_no_banned(prompt, completion, info) -> float:
 # DATASET PREPARATION
 # ============================================================================
 
-def load_fitness_dataset() -> Dataset:
+def load_fitness_dataset(tokenizer=None) -> Dataset:
     """Load and prepare the fitness scenarios dataset."""
-    from transformers import AutoTokenizer
     
     dataset_path = project_root / "data" / "fitness_scenarios.jsonl"
     if not dataset_path.exists():
         raise FileNotFoundError(f"Dataset not found at {dataset_path}")
     
-    # Load tokenizer to format prompts correctly
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
-        if tokenizer.chat_template is None:
-            print("⚠️  Warning: Tokenizer has no chat_template, using default format")
-            use_chat_template = False
-        else:
-            use_chat_template = True
-    except Exception as e:
-        print(f"⚠️  Warning: Could not load tokenizer: {e}")
-        print("   Using simple string format instead")
+    # Use provided tokenizer or load new one
+    if tokenizer is None:
+        try:
+            from transformers import AutoTokenizer
+            tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
+        except Exception as e:
+            print(f"⚠️  Warning: Could not load tokenizer: {e}")
+            tokenizer = None
+
+    if tokenizer and tokenizer.chat_template:
+        use_chat_template = True
+    else:
+        print("⚠️  Warning: Tokenizer has no chat_template or not loaded, using default format")
         use_chat_template = False
-        tokenizer = None
     
     raw_dataset = load_dataset("json", data_files=str(dataset_path))["train"]
     
@@ -959,9 +959,23 @@ def main():
         # Set environment variable so trainer uses existing run
         os.environ["WANDB_RUN_ID"] = str(wandb.run.id) if wandb.run else ""
     
+    # Load tokenizer first to ensure consistency
+    print("\n📚 Loading tokenizer...")
+    from transformers import AutoTokenizer
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, trust_remote_code=True)
+    
+    # Critical: Set pad_token to eos_token if not set, or ensuring consistency for generation
+    # Qwen 2.5 has distinct pad/eos, but for training, aligning them can prevent generation issues
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+        print(f"   Set pad_token to eos_token: {tokenizer.pad_token}")
+    else:
+        print(f"   Pad token already set: {tokenizer.pad_token} (ID: {tokenizer.pad_token_id})")
+        print(f"   EOS token: {tokenizer.eos_token} (ID: {tokenizer.eos_token_id})")
+    
     # Load dataset
     print("\n📦 Loading dataset...")
-    dataset = load_fitness_dataset()
+    dataset = load_fitness_dataset(tokenizer=tokenizer)
     print(f"   Loaded {len(dataset)} training examples")
     
     # Verify dataset format
@@ -1094,6 +1108,7 @@ def main():
         args=training_config,
         peft_config=peft_config,            # Enable LoRA
         callbacks=[GRPOTrainingCallback(wandb_logger, completion_logger)] if USE_WANDB else None,
+        processing_class=tokenizer,         # Pass the configured tokenizer
     )
     
     # Debug: Verify model is loaded correctly
