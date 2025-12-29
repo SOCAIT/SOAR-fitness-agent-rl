@@ -786,12 +786,12 @@ def load_fitness_dataset() -> Dataset:
             "scenario_id": example["id"],
         }
         
-        # GRPOTrainer can accept either:
-        # 1. String prompts (formatted text)
-        # 2. List of messages (will be formatted by trainer)
-        # We'll use string format to ensure proper generation
+        # GRPOTrainer expects "query" field for prompts (or "prompt")
+        # Using both to ensure compatibility
+        print(f"prompt_text: {prompt_text}")
         return {
-            "prompt": prompt_text,  # String format for reliable generation
+            "query": prompt_text,  # Primary field GRPOTrainer looks for
+            "prompt": prompt_text,  # Also include for compatibility
             "prompt_messages": messages,  # Keep original for reference
             "info": info,
             "task": "nutrition_planning",
@@ -833,6 +833,21 @@ def fitness_reward(completions: List[str], prompts: List[str] = None, **kwargs) 
     
     rewards = []
     infos = kwargs.get("infos", [{}] * len(completions))
+    
+    # Debug: Log what we're receiving (first few steps only)
+    if _current_step <= 2:
+        print(f"\n🔍 DEBUG: fitness_reward called at step {_current_step}")
+        print(f"   Number of completions: {len(completions)}")
+        if completions:
+            print(f"   First completion type: {type(completions[0])}")
+            print(f"   First completion preview: {str(completions[0])[:200]}...")
+        if prompts:
+            print(f"   Number of prompts: {len(prompts)}")
+            print(f"   First prompt type: {type(prompts[0])}")
+            print(f"   First prompt preview: {str(prompts[0])[:200]}...")
+        print(f"   kwargs keys: {list(kwargs.keys())}")
+        if "infos" in kwargs:
+            print(f"   Number of infos: {len(kwargs['infos'])}")
     
     # Convert completions to strings if they're in message format
     # GRPOTrainer may pass completions as strings or as lists of messages
@@ -1059,6 +1074,19 @@ def main():
         print("   - Total: ~75-80GB (tight fit!)")
         print("   - Recommendation: Monitor GPU memory closely")
     
+    # Debug: Print a sample from dataset to verify format
+    if len(dataset) > 0:
+        sample = dataset[0]
+        print(f"\n🔍 Dataset sample verification:")
+        print(f"   Keys: {list(sample.keys())}")
+        if "query" in sample:
+            print(f"   Query length: {len(sample['query'])} chars")
+            print(f"   Query preview: {sample['query'][:300]}...")
+        if "prompt" in sample:
+            print(f"   Prompt length: {len(sample['prompt'])} chars")
+        if "info" in sample:
+            print(f"   Info keys: {list(sample['info'].keys())}")
+    
     trainer = GRPOTrainer(
         model=MODEL_NAME,
         reward_funcs=fitness_reward,
@@ -1067,6 +1095,12 @@ def main():
         peft_config=peft_config,            # Enable LoRA
         callbacks=[GRPOTrainingCallback(wandb_logger, completion_logger)] if USE_WANDB else None,
     )
+    
+    # Debug: Verify model is loaded correctly
+    print(f"\n✅ Model loaded: {MODEL_NAME}")
+    print(f"   Model type: {type(trainer.model)}")
+    if hasattr(trainer.model, 'config'):
+        print(f"   Model config: {trainer.model.config.model_type}")
     
     # Train with logging
     print("\n🚀 Starting training...")
