@@ -38,7 +38,7 @@ from pydantic import BaseModel
 
 # Verifiers library
 import verifiers as vf
-from verifiers.rubrics import Rubric
+# Note: Rubric is accessed via vf.Rubric, not a separate import
 
 # Pinecone
 from pinecone import Pinecone
@@ -592,7 +592,7 @@ def main():
     
     # Create rubric with reward functions
     print("\n🎯 Creating rubric...")
-    rubric = Rubric(
+    rubric = vf.Rubric(
         funcs=[
             reward_schema,    # Schema validation
             reward_macros,    # Macro accuracy
