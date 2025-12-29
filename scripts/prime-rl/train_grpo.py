@@ -1015,15 +1015,6 @@ def main():
         output_dir="./outputs/prime-rl-fitness",
         num_train_epochs=1,
         
-        # --- 1. DISABLE VLLM ---
-        use_vllm=False,
-        
-        # --- 2. CRITICAL: ENABLE SAMPLING ---
-        # Without these, the model uses "greedy decoding" which leads to 
-        # infinite loops and "strange" repetitive text.
-        temperature=0.9,          # Essential for RL exploration (0.6 - 0.9 is good)
-        do_sample=True,           # Must be True for GRPO
-        
         # --- Standard Memory Settings ---
         per_device_train_batch_size=batch_size,
         gradient_accumulation_steps=grad_accum,
@@ -1036,6 +1027,17 @@ def main():
         logging_steps=1,
         report_to="wandb" if USE_WANDB else "none",
         run_name=RUN_NAME,
+        
+        # --- FIX: DISABLE VLLM CORRECTLY ---
+        use_vllm=False,                 # Disable vLLM server requirement
+        temperature=0.9,                # Top-level argument for temperature
+        
+        # Put "do_sample" inside this dictionary
+        generation_kwargs={
+            "do_sample": True,
+            "max_new_tokens": max_comp_len, 
+        }
+        # -----------------------------------
     )
     
     print("   Memory-efficient settings enabled:")
