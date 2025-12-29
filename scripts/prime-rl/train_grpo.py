@@ -1014,9 +1014,6 @@ def main():
         
         # Reduce memory fragmentation
         dataloader_pin_memory=False,
-        
-        # Additional memory optimizations for 32B
-        max_length=2048 if not is_32b else 1024,  # Shorter context for 32B
     )
     
     print("   Memory-efficient settings enabled:")
