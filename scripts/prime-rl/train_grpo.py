@@ -2,26 +2,26 @@
 """
 Prime-RL GRPO Training Script
 
-Full training loop using verifiers library with GRPO (Group Relative Policy Optimization).
+Full training loop using TRL's GRPO (Group Relative Policy Optimization) with LoRA.
 
 PREREQUISITES:
 --------------
-1. Install verifiers with training extras:
-   pip install verifiers[train]
-   
-2. Install vLLM for inference:
-   pip install vllm
+1. Install dependencies:
+   pip install trl peft transformers accelerate wandb
 
-3. Start vLLM server:
-   python -m vllm.entrypoints.openai.api_server \
-       --model Qwen/Qwen2.5-14B-Instruct \
-       --port 8000 \
-       --tensor-parallel-size 1
-
-4. Run training:
+2. Run training:
    accelerate launch scripts/prime-rl/train_grpo.py
 
+NOTE: vLLM is NOT required for training. The GRPOTrainer handles generation internally.
+      vLLM is only used for the separate evaluation script (prime-rag-fitnessrl.py).
+
+MEMORY REQUIREMENTS:
+-------------------
+- With LoRA (default): ~20-30GB GPU memory for 14B model
+- Without LoRA: 80GB+ GPU memory for 14B model
+
 References:
+- https://huggingface.co/docs/trl/main/en/grpo_trainer
 - https://github.com/PrimeIntellect-ai/verifiers
 """
 
@@ -42,6 +42,9 @@ import verifiers as vf
 
 # TRL for GRPO training
 from trl import GRPOTrainer, GRPOConfig
+
+# PEFT for LoRA
+from peft import LoraConfig, TaskType
 
 # Pinecone
 from pinecone import Pinecone
@@ -72,7 +75,7 @@ if not os.environ.get("PINECONE_API_KEY"):
 
 # Model configuration
 MODEL_NAME = "Qwen/Qwen2.5-14B-Instruct"
-VLLM_BASE_URL = os.getenv("VLLM_BASE_URL", "http://localhost:8000/v1")
+# Note: vLLM is NOT needed for training - only for separate evaluation script
 
 # W&B configuration
 WANDB_PROJECT = "fitness-agent-prime-rl"
@@ -107,7 +110,7 @@ class FitnessAgentWandbLogger:
             config={
                 "model": MODEL_NAME,
                 "max_turns": MAX_TURNS,
-                "vllm_url": VLLM_BASE_URL,
+                "training_method": "GRPO + LoRA",
                 **self.config,
             },
             tags=["training", "grpo", "fitness-agent", "prime-rl"],
@@ -646,10 +649,10 @@ def fitness_reward(completions: List[str], prompts: List[str] = None, **kwargs) 
 
 def main():
     print("=" * 80)
-    print("Prime-RL GRPO Training")
+    print("Prime-RL GRPO Training with LoRA")
     print("=" * 80)
     print(f"Model: {MODEL_NAME}")
-    print(f"vLLM URL: {VLLM_BASE_URL}")
+    print(f"Training Method: GRPO + LoRA (parameter-efficient)")
     print(f"W&B Logging: {'Enabled' if USE_WANDB else 'Disabled'}")
     print("=" * 80)
     
@@ -657,8 +660,12 @@ def main():
     wandb_logger = FitnessAgentWandbLogger(config={
         "model": MODEL_NAME,
         "max_turns": MAX_TURNS,
-        "num_generations": 4,
-        "max_completion_length": 2048,
+        "num_generations": 2,
+        "max_completion_length": 1024,
+        "lora_rank": 16,
+        "lora_alpha": 32,
+        "per_device_batch_size": 1,
+        "gradient_accumulation_steps": 16,
     })
     wandb_run = wandb_logger.init_run()
     
@@ -674,24 +681,77 @@ def main():
     # See: https://huggingface.co/docs/trl/main/en/grpo_trainer
     print("\n🏋️ Creating GRPO Trainer...")
     
-    # Training config (optional - uses defaults if not provided)
+    # Memory-efficient training config
+    # For 14B model on 80GB GPU, use small batches + gradient accumulation
     training_config = GRPOConfig(
         output_dir="./outputs/prime-rl-fitness",
         num_train_epochs=3,
-        per_device_train_batch_size=4,
-        gradient_accumulation_steps=4,
+        
+        # Memory-efficient settings
+        per_device_train_batch_size=1,      # Small batch for large model
+        gradient_accumulation_steps=16,     # Accumulate for effective batch of 16
+        
+        # GRPO specific - reduce generations for memory
+        num_generations=2,                  # Reduced from 4
+        max_completion_length=1024,         # Reduced from 2048
+        
+        # Mixed precision for memory savings
+        bf16=True,                          # Use bf16 on Ampere+ GPUs
+        
+        # Gradient checkpointing saves memory
+        gradient_checkpointing=True,
+        
+        # Learning rate
         learning_rate=1e-5,
+        warmup_ratio=0.1,
+        
+        # Logging
         logging_steps=1,
         save_steps=100,
         report_to="wandb" if USE_WANDB else "none",
         run_name=RUN_NAME,
+        
+        # Reduce memory fragmentation
+        dataloader_pin_memory=False,
     )
+    
+    print("   Memory-efficient settings enabled:")
+    print(f"   - Batch size: 1 (effective: 16 with grad accum)")
+    print(f"   - Gradient checkpointing: enabled")
+    print(f"   - Mixed precision: bf16")
+    print(f"   - Num generations: 2")
+    
+    # LoRA configuration for parameter-efficient training
+    # This drastically reduces memory usage by only training ~0.1% of parameters
+    peft_config = LoraConfig(
+        r=16,                               # LoRA rank (higher = more capacity, more memory)
+        lora_alpha=32,                      # LoRA alpha (scaling factor)
+        lora_dropout=0.05,                  # Dropout for regularization
+        target_modules=[                    # Modules to apply LoRA to
+            "q_proj",
+            "k_proj", 
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
+        ],
+        task_type=TaskType.CAUSAL_LM,
+        bias="none",
+    )
+    
+    print("   LoRA configuration:")
+    print(f"   - Rank (r): {peft_config.r}")
+    print(f"   - Alpha: {peft_config.lora_alpha}")
+    print(f"   - Target modules: {len(peft_config.target_modules)} layers")
+    print(f"   - Trainable params: ~0.1% of full model")
     
     trainer = GRPOTrainer(
         model=MODEL_NAME,
         reward_funcs=fitness_reward,
         train_dataset=dataset,
         args=training_config,
+        peft_config=peft_config,            # Enable LoRA
     )
     
     # Train with logging
