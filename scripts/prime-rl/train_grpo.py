@@ -84,7 +84,7 @@ MODEL_NAME = "Qwen/Qwen2.5-14B-Instruct"
 # Note: vLLM is NOT needed for training - only for separate evaluation script
 
 # W&B configuration
-WANDB_PROJECT = "fitness-agent-prime-rl"
+WANDB_PROJECT = "fitness-agent-prime-rl-002"
 WANDB_ENTITY = os.getenv("WANDB_ENTITY", None)
 USE_WANDB = WANDB_AVAILABLE and os.getenv("WANDB_API_KEY")
 RUN_NAME = f"grpo-fitness-{datetime.now().strftime('%Y%m%d-%H%M')}"
