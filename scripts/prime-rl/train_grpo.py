@@ -1045,11 +1045,7 @@ def main():
         
         # vLLM Optimization (Critical for generation quality/speed)
         use_vllm=True,
-        vllm_init_kwargs={
-            "gpu_memory_utilization": 0.3, # Allocate 30% to vLLM, rest to training
-            "dtype": "bfloat16" if USE_BF16 else "float16",
-            "max_model_len": max_comp_len + 512, # buffer for prompt
-        },
+        vllm_gpu_memory_utilization=0.3, # Allocate 30% to vLLM, rest to training
     )
     
     print("   Memory-efficient settings enabled:")
