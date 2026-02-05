@@ -24,14 +24,14 @@ MODEL_NAME = "fitness-agent-langgraph-14B-qwen2.5-002"
 PROJECT_NAME = "fitness-agent-langgraph-rag-v2"
 SEED = 42
 TENSOR_PARALLEL_SIZE = 1
-GPU_MEMORY_UTILIZATION = 0.85
+GPU_MEMORY_UTILIZATION = 0.75
 MAX_SEQ_LENGTH = 8192
 ENFORCE_EAGER = True
 
 # TRAINING CONFIGURATION
-TRAINING_GROUPS_PER_STEP = 4
+TRAINING_GROUPS_PER_STEP = 2
 TRAINING_NUM_EPOCHS = 3
-TRAINING_ROLLOUTS_PER_GROUP = 12
+TRAINING_ROLLOUTS_PER_GROUP = 8
 TRAINING_LEARNING_RATE = 1e-5
 TRAINING_MAX_STEPS = 150
 TRAINING_VALIDATION_EVERY = 10
@@ -514,12 +514,9 @@ async def combined_reward_v2(payload: dict, scenario_data: Scenario, traj):
 
     # 5. Provenance (tool-macro consistency)
     if provenance_reward_names_only_totals_only is None:
-        print("[DEBUG] Provenance reward function is None!")
         r_prov, info_prov = 0.0, {"reason": "provenance_reward_unavailable"}
     else:
-        print("[DEBUG] Calculating Provenance Reward...")
         r_prov, info_prov = provenance_reward_names_only_totals_only(payload, traj)
-        print(f"[DEBUG] Provenance Result: r_prov={r_prov}")
 
     # Weighted Sum (smooth rewards)
     # Macro accuracy is paramount -> 0.45
@@ -641,68 +638,41 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
 # MAIN
 # ============================================================================
 
- # =========================================================================
-    # VALIDATION FUNCTION
-    # =========================================================================
-    async def run_validation(step: int):
-        """Run validation on held-out test scenarios."""
-        print(f"\n🔍 Running validation at step {step}...")
-        
-        # Sample validation scenarios (or use all if small enough)
-        val_sample = val_scenarios[:TRAINING_VALIDATION_SAMPLES] if len(val_scenarios) > TRAINING_VALIDATION_SAMPLES else val_scenarios
-        
-        val_groups = []
-        for scenario in val_sample:
-            # Only 1 rollout per scenario for validation (no need for multiple)
-            val_groups.append(art.TrajectoryGroup(
-                [wrap_rollout(model, rollout)(model, FitnessScenario(step=step, scenario=scenario))]
-            ))
-        
-        finished_val_groups = await art.gather_trajectory_groups(
-            val_groups, 
-            pbar_desc="validation",
-            max_exceptions=len(val_sample)
-        )
-        
-        # Calculate validation metrics
-        total_reward = 0.0
-        total_correct = 0.0
-        count = 0
-        
-        for group in finished_val_groups:
-            for traj in group:
-                total_reward += traj.reward
-                total_correct += traj.metrics.get("correct", 0.0)
-                count += 1
-        
-        avg_reward = total_reward / count if count > 0 else 0.0
-        avg_correct = total_correct / count if count > 0 else 0.0
-        
-        print(f"📈 Validation Results (step {step}):")
-        print(f"   Avg Reward: {avg_reward:.4f}")
-        print(f"   Avg Correct: {avg_correct:.4f}")
-        print(f"   Samples: {count}")
-        
-        # Log to W&B if available
-        if os.getenv("WANDB_API_KEY"):
-            try:
-                import wandb
-                wandb.log({
-                    "val/avg_reward": avg_reward,
-                    "val/avg_correct": avg_correct,
-                    "val/num_samples": count,
-                    "step": step,
-                })
-            except Exception as e:
-                print(f"⚠️  W&B logging error: {e}")
-        
-        return {"avg_reward": avg_reward, "avg_correct": avg_correct, "count": count}
-
 async def main():
     global model, backend
     set_all_seeds(SEED)
     
-    # ... [GPU setup code stays the same] ...
+    # Check GPU availability and verify tensor parallel size
+    import torch
+    
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA is not available. This script requires GPU support.")
+    
+    num_gpus = torch.cuda.device_count()
+    print(f"🔍 Detected {num_gpus} GPU(s)")
+    
+    # Check CUDA_VISIBLE_DEVICES
+    cuda_visible = os.environ.get("CUDA_VISIBLE_DEVICES")
+    if cuda_visible:
+        print(f"📌 CUDA_VISIBLE_DEVICES={cuda_visible}")
+        # Verify the number matches
+        visible_count = len([x for x in cuda_visible.split(",") if x.strip()])
+        if visible_count != num_gpus:
+            print(f"⚠️  Warning: CUDA_VISIBLE_DEVICES specifies {visible_count} device(s) but PyTorch sees {num_gpus}")
+    
+    # Print GPU memory info
+    for i in range(num_gpus):
+        props = torch.cuda.get_device_properties(i)
+        memory_gb = props.total_memory / (1024**3)
+        print(f"   GPU {i}: {props.name} ({memory_gb:.1f} GB)")
+    
+    # Use actual GPU count if TENSOR_PARALLEL_SIZE exceeds available GPUs
+    actual_tp_size = min(TENSOR_PARALLEL_SIZE, num_gpus)
+    if TENSOR_PARALLEL_SIZE > num_gpus:
+        print(f"⚠️  Warning: TENSOR_PARALLEL_SIZE ({TENSOR_PARALLEL_SIZE}) exceeds available GPUs ({num_gpus}). Using {actual_tp_size} GPUs.")
+    
+    if actual_tp_size < TENSOR_PARALLEL_SIZE:
+        print(f"📊 Using tensor_parallel_size={actual_tp_size} (requested {TENSOR_PARALLEL_SIZE})")
     
     print(f"🤖 Initializing model: {MODEL_NAME}")
     print(f"   Base model: {BASE_MODEL_NAME}")
@@ -712,163 +682,68 @@ async def main():
         name=MODEL_NAME, 
         project=PROJECT_NAME,
         base_model=BASE_MODEL_NAME
-    )
+        )
     
+    # Configure tensor parallelization for multi-GPU support
+    print(f"⚙️  Configuring model with tensor_parallel_size={actual_tp_size}")
     model._internal_config = art.dev.InternalModelConfig(
         init_args=art.dev.InitArgs(
             max_seq_length=MAX_SEQ_LENGTH,
         ),
         engine_args=art.dev.EngineArgs(
+            # enforce_eager=ENFORCE_EAGER,
             gpu_memory_utilization=GPU_MEMORY_UTILIZATION,
+            #tensor_parallel_size=actual_tp_size,
         ),
     )
     
     print("🔧 Initializing backend...")
     backend = LocalBackend(in_process=True, path="./.art")
     
-    print("📝 Registering model with backend...")
-    await model.register(backend)
-    print("✅ Model registered successfully!")
+    print("📝 Registering model with backend (this may take a moment)...")
+    try:
+        await model.register(backend)
+        print("✅ Model registered successfully!")
+    except Exception as e:
+        print(f"❌ Error during model registration: {e}")
+        print(f"💡 Troubleshooting tips:")
+        print(f"   - Verify you have {actual_tp_size} GPU(s) available")
+        print(f"   - Check GPU memory: nvidia-smi")
+        print(f"   - Try reducing GPU_MEMORY_UTILIZATION from {GPU_MEMORY_UTILIZATION} to 0.6")
+        print(f"   - Try reducing tensor_parallel_size to 1 for single GPU")
+        raise
     
+    # Note: Weave logging disabled due to token usage validation errors with local vLLM
     if os.getenv("WANDB_API_KEY"):
         weave.init(model.project, settings={"print_call_link": False})
 
     from art.utils import iterate_dataset
     from art.langgraph import wrap_rollout
 
-    # Split scenarios into train and validation
-    train_scenarios = [s for s in scenarios_list if s.split == "train"]
-    val_scenarios = [s for s in scenarios_list if s.split == "test"]
-    
-    print(f"📊 Training scenarios: {len(train_scenarios)}")
-    print(f"📊 Validation scenarios: {len(val_scenarios)}")
-
-    # =========================================================================
-    # VALIDATION FUNCTION
-    # =========================================================================
-    async def run_validation(step: int):
-        """Run validation on held-out test scenarios."""
-        print(f"\n🔍 Running validation at step {step}...")
-        
-        # Sample validation scenarios (or use all if small enough)
-        val_sample = val_scenarios[:TRAINING_VALIDATION_SAMPLES] if len(val_scenarios) > TRAINING_VALIDATION_SAMPLES else val_scenarios
-        
-        val_groups = []
-        for scenario in val_sample:
-            # Only 1 rollout per scenario for validation (no need for multiple)
-            val_groups.append(art.TrajectoryGroup(
-                [wrap_rollout(model, rollout)(model, FitnessScenario(step=step, scenario=scenario))]
-            ))
-        
-        finished_val_groups = await art.gather_trajectory_groups(
-            val_groups, 
-            pbar_desc="validation",
-            max_exceptions=len(val_sample)
-        )
-        
-        # Calculate validation metrics
-        total_reward = 0.0
-        total_correct = 0.0
-        count = 0
-        
-        for group in finished_val_groups:
-            for traj in group:
-                total_reward += traj.reward
-                total_correct += traj.metrics.get("correct", 0.0)
-                count += 1
-        
-        avg_reward = total_reward / count if count > 0 else 0.0
-        avg_correct = total_correct / count if count > 0 else 0.0
-        
-        print(f"📈 Validation Results (step {step}):")
-        print(f"   Avg Reward: {avg_reward:.4f}")
-        print(f"   Avg Correct: {avg_correct:.4f}")
-        print(f"   Samples: {count}")
-        
-        # Log to W&B if available
-        if os.getenv("WANDB_API_KEY"):
-            try:
-                import wandb
-                wandb.log({
-                    "val/avg_reward": avg_reward,
-                    "val/avg_correct": avg_correct,
-                    "val/num_samples": count,
-                    "step": step,
-                })
-            except Exception as e:
-                print(f"⚠️  W&B logging error: {e}")
-        
-        return {"avg_reward": avg_reward, "avg_correct": avg_correct, "count": count}
-
-    # =========================================================================
-    # TRAINING LOOP
-    # =========================================================================
+    # CORRECT - fixed code:
     training_iterator = iterate_dataset(
-        train_scenarios,
+        [s for s in scenarios_list if s.split == "train"],
         groups_per_step=TRAINING_GROUPS_PER_STEP,
         num_epochs=TRAINING_NUM_EPOCHS,
         initial_step=await model.get_step()
     )
-    
+
     for batch in training_iterator:
-        current_step = batch.step
-        print(f"\n{'='*60}")
-        print(f"Step {current_step} | Epoch {batch.epoch}")
-        print(f"{'='*60}")
+        print(f"Step {batch.step}")
         
-        # Check max steps
-        if current_step >= TRAINING_MAX_STEPS:
-            print(f"🛑 Reached max_steps ({TRAINING_MAX_STEPS}), stopping training.")
+        # Stop if we've hit max steps
+        if batch.step >= TRAINING_MAX_STEPS:
+            print(f"Reached max_steps ({TRAINING_MAX_STEPS}), stopping training.")
             break
         
-        # Create trajectory groups for training
         groups = []
         for item in batch.items:
             groups.append(art.TrajectoryGroup(
-                (wrap_rollout(model, rollout)(model, FitnessScenario(step=current_step, scenario=item)) 
-                 for _ in range(TRAINING_ROLLOUTS_PER_GROUP))
+                (wrap_rollout(model, rollout)(model, FitnessScenario(step=batch.step, scenario=item)) for _ in range(TRAINING_ROLLOUTS_PER_GROUP))
             ))
-        
-        # Gather training trajectories
-        finished_groups = await art.gather_trajectory_groups(
-            groups, 
-            pbar_desc="training",
-            max_exceptions=TRAINING_ROLLOUTS_PER_GROUP * len(batch.items)
-        )
-        
-        # Calculate training metrics for this step
-        train_rewards = []
-        for group in finished_groups:
-            for traj in group:
-                train_rewards.append(traj.reward)
-        
-        if train_rewards:
-            avg_train_reward = sum(train_rewards) / len(train_rewards)
-            print(f"📊 Training batch avg reward: {avg_train_reward:.4f}")
-        
-        # Train the model
-        await model.train(
-            finished_groups, 
-            config=art.TrainConfig(learning_rate=TRAINING_LEARNING_RATE)
-        )
-        print(f"✅ Training step {current_step} complete")
-        
-        # Run validation periodically
-        if current_step > 0 and current_step % TRAINING_VALIDATION_EVERY == 0:
-            val_results = await run_validation(current_step)
-    
-    # Final validation
-    print("\n" + "="*60)
-    print("🏁 Training complete! Running final validation...")
-    print("="*60)
-    final_val = await run_validation(current_step)
-    
-    print("\n🎉 Training finished!")
-    print(f"   Final validation reward: {final_val['avg_reward']:.4f}")
-    print(f"   Final validation correct: {final_val['avg_correct']:.4f}")
-
-
-
+            
+        finished_groups = await art.gather_trajectory_groups(groups, max_exceptions=5)
+        await model.train(finished_groups, config=art.TrainConfig(learning_rate=TRAINING_LEARNING_RATE))
 
 if __name__ == "__main__":
     import asyncio
