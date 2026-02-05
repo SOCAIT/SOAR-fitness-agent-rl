@@ -649,7 +649,7 @@ The tool argument must be a JSON OBJECT (a dict) with schema: {"meals":[{...}]}.
             traj.metrics["correct"] = score
             print(f"Step {fitness_scenario.step} | ID {scenario.id} | Reward: {score:.3f}")
         else:
-            traj.reward = -0.1
+            traj.reward = -0.0
             traj.metrics["correct"] = 0.0
             traj.messages_and_choices.append({"role": "system", "content": "[NO_FINAL_TOOL_CALL] giving -0.1"})
 
