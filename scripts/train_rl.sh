@@ -181,4 +181,4 @@ echo "Starting training... logs -> ${LOG_FILE}"
 echo "To re-enter venv later: ${ACTIVATE_CMD}"
 
 # Use python directly; entrypoint is async-compatible in train.py
-python train.py 2>&1 | tee -a "${LOG_FILE}"
+python scripts/rag_fitnessrl_art_v2.py 2>&1 | tee -a "${LOG_FILE}"

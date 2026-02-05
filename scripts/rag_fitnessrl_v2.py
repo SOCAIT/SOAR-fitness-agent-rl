@@ -43,34 +43,7 @@ TRAINING_VALIDATION_SAMPLES = 10
 import os
 import sys
 
-# Fix for PyTorch 2.7.1+ compatibility: disable expandable_segments for CUDA memory pool
-# This must be set BEFORE any CUDA initialization (before importing torch)
-# Prevents "torch.cuda.MemPool doesn't currently support expandable_segments" error
-os.environ.setdefault('PYTORCH_CUDA_ALLOC_CONF', 'expandable_segments:False')
-
-# # Import unsloth early to ensure it's fully initialized before vLLM spawns workers
-# # This prevents circular import errors during multiprocessing worker initialization
-# # The import must happen before any transformers/trl/peft imports
-# try:
-#     import unsloth  # noqa: F401
-    
-#     # Patch torch.cuda.MemPool to handle expandable_segments gracefully
-#     # This fixes "torch.cuda.MemPool doesn't currently support expandable_segments" error
-#     # Must be done after importing unsloth but before vLLM initializes
-#     import torch
-#     if hasattr(torch.cuda, 'MemPool'):
-#         _original_mempool_init = torch.cuda.MemPool.__init__
-#         def _patched_mempool_init(self, *args, **kwargs):
-#             # Remove expandable_segments if present, as PyTorch 2.7.1 doesn't support it
-#             if 'expandable_segments' in kwargs:
-#                 kwargs.pop('expandable_segments')
-#             return _original_mempool_init(self, *args, **kwargs)
-#         torch.cuda.MemPool.__init__ = _patched_mempool_init
-# except ImportError:
-#     pass  # Unsloth may not be available, but that's okay
-# except Exception as e:
-#     print(f"⚠️  Warning: Could not patch MemPool (this is usually fine): {e}")
-#     pass
+#
 import json
 import math
 import re
@@ -726,7 +699,6 @@ async def main():
     training_iterator = iterate_dataset(
         [s for s in scenarios_list if s.split == "train"],
         groups_per_step=TRAINING_GROUPS_PER_STEP,
-        rollouts_per_group=TRAINING_ROLLOUTS_PER_GROUP,
         num_epochs=TRAINING_NUM_EPOCHS,
         max_steps=TRAINING_MAX_STEPS,
         initial_step=await model.get_step()
@@ -737,7 +709,7 @@ async def main():
         groups = []
         for item in batch.items:
             groups.append(art.TrajectoryGroup(
-                (wrap_rollout(model, rollout)(model, FitnessScenario(step=batch.step, scenario=item.model_dump())) for _ in range(4))
+                (wrap_rollout(model, rollout)(model, FitnessScenario(step=batch.step, scenario=item.model_dump())) for _ in range(TRAINING_ROLLOUTS_PER_GROUP))
             ))
             
         finished_groups = await art.gather_trajectory_groups(groups, max_exceptions=5)
