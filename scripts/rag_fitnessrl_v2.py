@@ -20,7 +20,7 @@ PREREQUISITES:
 ## CONFIGURATION
 
 BASE_MODEL_NAME = "Qwen/Qwen2.5-14B-Instruct"
-MODEL_NAME = "fitness-agent-langgraph-14B-qwen2.5-001"
+MODEL_NAME = "fitness-agent-langgraph-14B-qwen2.5-002"
 PROJECT_NAME = "fitness-agent-langgraph-rag-v2"
 SEED = 42
 TENSOR_PARALLEL_SIZE = 1
