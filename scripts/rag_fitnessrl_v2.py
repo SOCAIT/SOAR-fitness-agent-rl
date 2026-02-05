@@ -320,6 +320,9 @@ def extract_meal_names(data):
 # REWARD FUNCTIONS (V2)
 # ============================================================================
 
+# Provenance reward (tool-macro consistency)
+from src.env.provenance_reward import provenance_reward_names_only_totals_only
+
 # Utils
 def _extract_first_json_segment(s: str) -> str | None:
     start_candidates = [s.find('{'), s.find('[')]
@@ -383,70 +386,61 @@ def verify_schema_v2(payload: dict) -> Tuple[float, Dict]:
                 
     return 1.0, {"status": "valid"}
 
-# 2. Strict Macro Check (+/- 5%)
-def verify_macros_strict(payload: dict, targets: Dict[str, float], tolerance=0.05) -> Tuple[float, Dict]:
+# 2. Continuous Macro Check (smooth reward)
+def verify_macros_continuous(payload: dict, targets: Dict[str, float]) -> Tuple[float, Dict]:
     meals = payload.get("meals", [])
-    if not meals: return 0.0, {"error": "no_meals"}
-    
+    if not meals:
+        return 0.0, {"error": "no_meals"}
+
     total_cals = sum(float(m.get("calories", 0)) for m in meals)
     total_prot = sum(float(m.get("proteins", 0)) for m in meals)
     total_carb = sum(float(m.get("carbs", 0)) for m in meals)
     total_fat = sum(float(m.get("fats", 0)) for m in meals)
-    
-    errors = {}
-    passed = True
-    
-    # Check Calories
-    if targets.get("calories"):
-        target = float(targets["calories"])
-        if target > 0:
-            err = abs(total_cals - target) / target
-            errors["calories"] = err
-            if err > tolerance: passed = False
-            
-    # Check Protein
-    if targets.get("protein"):
-        target = float(targets["protein"])
-        if target > 0:
-            err = abs(total_prot - target) / target
-            errors["protein"] = err
-            if err > tolerance: passed = False
-            
-    # Optional checks if targets exist
-    if targets.get("carbs"):
-        target = float(targets["carbs"])
-        if target > 0:
-            err = abs(total_carb - target) / target
-            errors["carbs"] = err
-            if err > tolerance and tolerance > 0.0: passed = False
-            
-    if targets.get("fat"):
-        target = float(targets["fat"])
-        if target > 0:
-            err = abs(total_fat - target) / target
-            errors["fat"] = err
-            if err > tolerance and tolerance > 0.0: passed = False
-            
-    score = 1.0 if passed else 0.0
-    return score, {"totals": {"cal": total_cals, "prot": total_prot}, "errors": errors, "passed": passed}
 
-# 3. Variety Heuristic
+    totals = {
+        "calories": total_cals,
+        "protein": total_prot,
+        "carbs": total_carb,
+        "fat": total_fat,
+    }
+
+    errors: Dict[str, float] = {}
+    for key in ["calories", "protein", "carbs", "fat"]:
+        target_val = targets.get(key)
+        if target_val is None:
+            continue
+        target = float(target_val)
+        if target > 0:
+            errors[key] = abs(totals[key] - target) / target
+
+    if not errors:
+        return 0.0, {"error": "no_targets"}
+
+    mean_err = sum(errors.values()) / len(errors)
+    score = max(0.0, 1.0 - mean_err)
+    return score, {"totals": totals, "errors": errors, "mean_error": mean_err}
+
+# 3. Variety Heuristic (smooth reward)
 def verify_variety_heuristic(payload: dict) -> Tuple[float, Dict]:
     meals = payload.get("meals", [])
     if not meals: return 0.0, {"reason": "no_meals"}
     
-    # Check number of meals (aim for 3+)
     num_meals = len(meals)
-    if num_meals < 3:
-        return 0.0, {"reason": f"too_few_meals_{num_meals}"}
-        
-    # Check unique meal names (aim for 3+)
-    names = [m.get("name", "").lower().strip() for m in meals]
+    names = [m.get("name", "").lower().strip() for m in meals if m.get("name")]
     unique_names = set(names)
+
+    # Smooth score based on meal count and variety
+    meals_score = min(1.0, num_meals / 3.0)
+    variety_score = min(1.0, len(unique_names) / 3.0)
+    score = 0.5 * meals_score + 0.5 * variety_score
+
+    reason = []
+    if num_meals < 3:
+        reason.append(f"too_few_meals_{num_meals}")
     if len(unique_names) < 3:
-        return 0.0, {"reason": f"low_variety_{len(unique_names)}_unique"}
-        
-    return 1.0, {"unique_meals": len(unique_names), "total_meals": num_meals}
+        reason.append(f"low_variety_{len(unique_names)}_unique")
+
+    return score, {"unique_meals": len(unique_names), "total_meals": num_meals, "reason": reason or ["ok"]}
 
 # 4. LLM Variety Judge
 class VarietyJudgeResponse(BaseModel):
@@ -486,14 +480,14 @@ async def combined_reward_v2(payload: dict, scenario_data: Scenario, traj):
         "carbs": scenario_data.daily_carb_target,
         "fat": scenario_data.daily_fat_target
     }
-    r_macro, info_macro = verify_macros_strict(payload, targets, tolerance=0.05)
+    r_macro, info_macro = verify_macros_continuous(payload, targets)
     
     # 3. Variety Heuristic
     r_variety_h, info_variety = verify_variety_heuristic(payload)
     
-    # 4. LLM Judge (Only if basic checks pass to save cost/time)
+    # 4. LLM Judge (Only if schema is valid to save cost/time)
     r_variety_llm = 0.0
-    if r_macro > 0.0 and r_variety_h > 0.0:
+    if r_variety_h > 0.0:
          judge_res = await llm_variety_judge(scenario_data.question, payload)
          r_variety_llm = judge_res.get("score", 0.0)
          info_variety["llm_reason"] = judge_res.get("reason")
@@ -501,31 +495,31 @@ async def combined_reward_v2(payload: dict, scenario_data: Scenario, traj):
         # Penalize if basic variety check fails
         pass
 
-    # Weighted Sum
-    # Macro accuracy is paramount -> 0.4
-    # Schema is a gate (already handled, if 0 return 0)
-    # Variety Heuristic -> 0.3
-    # LLM Variety -> 0.3
-    
-    # If macros fail, score is low
-    if r_macro == 0.0:
-        final_score = 0.1 # participation award
-    else:
-        # Base score from macros
-        final_score = 0.4 
-        # Add variety
-        final_score += (0.3 * r_variety_h)
-        # Add LLM score
-        final_score += (0.3 * r_variety_llm)
+    # 5. Provenance (tool-macro consistency)
+    r_prov, info_prov = provenance_reward_names_only_totals_only(payload, traj)
+
+    # Weighted Sum (smooth rewards)
+    # Macro accuracy is paramount -> 0.45
+    # Variety Heuristic -> 0.20
+    # LLM Variety -> 0.15
+    # Provenance -> 0.20
+    final_score = (
+        (0.45 * r_macro)
+        + (0.20 * r_variety_h)
+        + (0.15 * r_variety_llm)
+        + (0.20 * r_prov)
+    )
         
     info = {
         "r_schema": r_schema,
         "r_macro": r_macro,
         "r_variety_h": r_variety_h,
         "r_variety_llm": r_variety_llm,
+        "r_provenance": r_prov,
         "macro_info": info_macro,
         "variety_info": info_variety
     }
+    info["provenance_info"] = info_prov
     
     return final_score, info
 
@@ -560,7 +554,17 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
       )
       res_list = extract_meal_names(results)
       traj.messages_and_choices.append(
-          {"role": "tool_log", "content": json.dumps({"tool": "recipe_search", "query": meal_query, "result": res_list})}
+          {
+              "role": "tool_log",
+              "content": json.dumps(
+                  {
+                      "tool": "recipe_search",
+                      "query": meal_query,
+                      "result": res_list,
+                      "end": {"tool": "recipe_semantic_search", "result": res_list},
+                  }
+              ),
+          }
       )
       return json.dumps(res_list)
 
