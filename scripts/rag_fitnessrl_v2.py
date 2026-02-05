@@ -43,7 +43,6 @@ TRAINING_VALIDATION_SAMPLES = 10
 import os
 import sys
 
-#
 import json
 import math
 import re
@@ -200,9 +199,6 @@ print(f"Created a list of {len(scenarios_list)} Scenario objects.")
 # MODEL CONFIG
 # ============================================================================
 
-# Model configuration is set at the top of the file (lines 22-24)
-# BASE_MODEL_NAME, MODEL_NAME, and PROJECT_NAME are already defined above
-
 model = None
 backend = None
 
@@ -299,7 +295,7 @@ NUTRITION PLAN PIPELINE
      }}
 
    • Ensure the summed macros for the day are within ±5% of the targets.
-   • IMPORTANT: Every "name" MUST match a recipe name previously returned by recipe_semantic_search. 
+   • IMPORTANT: Every "name" MUST match a recipe name previously returned by recipe_semantic_search.
 
 5) TOOL CALL (FINALIZE)
    • Call return_final_answer_tool with the EXACT JSON meal plan.
@@ -321,24 +317,12 @@ def extract_meal_names(data):
 # ============================================================================
 
 # Provenance reward (tool-macro consistency)
-def _load_provenance_reward():
-    try:
-        from src.env.provenance_reward import provenance_reward_names_only_totals_only
-        return provenance_reward_names_only_totals_only
-    except ModuleNotFoundError:
-        import importlib.util
-
-        _prov_path = project_root / "src" / "env" / "provenance_reward.py"
-        if not _prov_path.exists():
-            return None
-        _spec = importlib.util.spec_from_file_location("provenance_reward", _prov_path)
-        if _spec is None or _spec.loader is None:
-            return None
-        _prov_module = importlib.util.module_from_spec(_spec)
-        _spec.loader.exec_module(_prov_module)
-        return _prov_module.provenance_reward_names_only_totals_only
-
-provenance_reward_names_only_totals_only = _load_provenance_reward()
+try:
+    from src.env.provenance_reward import provenance_reward_names_only_totals_only
+    print("[DEBUG] Successfully imported provenance_reward from src.env")
+except Exception as e:
+    print(f"[ERROR] Failed to import provenance_reward: {e}")
+    provenance_reward_names_only_totals_only = None
 
 # Utils
 def _extract_first_json_segment(s: str) -> str | None:
@@ -371,7 +355,7 @@ def get_payload(obj):
         try: obj = json.loads(obj)
         except:
              seg = _extract_first_json_segment(obj)
-             if seg: 
+             if seg:
                  try: obj = json.loads(seg)
                  except: pass
     if isinstance(obj, dict): return obj
@@ -382,17 +366,17 @@ def get_payload(obj):
 def verify_schema_v2(payload: dict) -> Tuple[float, Dict]:
     if not isinstance(payload, dict):
         return 0.0, {"error": "payload_not_dict"}
-    
+
     if "meals" not in payload:
         return 0.0, {"error": "missing_meals_key"}
-        
+
     meals = payload["meals"]
     if not isinstance(meals, list):
         return 0.0, {"error": "meals_not_list"}
-        
+
     if len(meals) == 0:
         return 0.0, {"error": "empty_meals_list"}
-        
+
     required_keys = ["name", "quantity", "calories", "proteins", "carbs", "fats"]
     for i, meal in enumerate(meals):
         if not isinstance(meal, dict):
@@ -400,7 +384,7 @@ def verify_schema_v2(payload: dict) -> Tuple[float, Dict]:
         for k in required_keys:
             if k not in meal:
                 return 0.0, {"error": f"meal_{i}_missing_{k}"}
-                
+
     return 1.0, {"status": "valid"}
 
 # 2. Continuous Macro Check (smooth reward)
@@ -441,12 +425,11 @@ def verify_macros_continuous(payload: dict, targets: Dict[str, float]) -> Tuple[
 def verify_variety_heuristic(payload: dict) -> Tuple[float, Dict]:
     meals = payload.get("meals", [])
     if not meals: return 0.0, {"reason": "no_meals"}
-    
+
     num_meals = len(meals)
     names = [m.get("name", "").lower().strip() for m in meals if m.get("name")]
     unique_names = set(names)
 
-    # Smooth score based on meal count and variety
     meals_score = min(1.0, num_meals / 3.0)
     variety_score = min(1.0, len(unique_names) / 3.0)
     score = 0.5 * meals_score + 0.5 * variety_score
@@ -472,12 +455,11 @@ async def llm_variety_judge(scenario_text, plan_json):
     ]
     try:
         response = await acompletion(
-            model="openai/gpt-4o-mini", # Or use the local model if needed
+            model="openai/gpt-4o-mini",
             messages=messages,
             response_format=VarietyJudgeResponse
         )
         content = response.choices[0].message.content
-        # If response_format handled it, we get a json string
         return json.loads(content)
     except Exception as e:
         print(f"Judge Error: {e}")
@@ -489,7 +471,7 @@ async def combined_reward_v2(payload: dict, scenario_data: Scenario, traj):
     r_schema, info_schema = verify_schema_v2(payload)
     if r_schema < 1.0:
         return 0.0, {"failure": "schema", "info": info_schema}
-        
+
     # 2. Macros
     targets = {
         "calories": scenario_data.daily_cal_target,
@@ -498,41 +480,33 @@ async def combined_reward_v2(payload: dict, scenario_data: Scenario, traj):
         "fat": scenario_data.daily_fat_target
     }
     r_macro, info_macro = verify_macros_continuous(payload, targets)
-    
+
     # 3. Variety Heuristic
     r_variety_h, info_variety = verify_variety_heuristic(payload)
-    
+
     # 4. LLM Judge (Only if schema is valid to save cost/time)
     r_variety_llm = 0.0
     if r_variety_h > 0.0:
          judge_res = await llm_variety_judge(scenario_data.question, payload)
          r_variety_llm = judge_res.get("score", 0.0)
          info_variety["llm_reason"] = judge_res.get("reason")
-    else:
-        # Penalize if basic variety check fails
-        pass
 
-    # 5. Provenance (tool-macro consistency)
+    # 5. Provenance (tool-macro consistency)  ✅ MITIGATION #3: contain exceptions
     if provenance_reward_names_only_totals_only is None:
-        print("[DEBUG] Provenance reward function is None!")
         r_prov, info_prov = 0.0, {"reason": "provenance_reward_unavailable"}
     else:
-        print("[DEBUG] Calculating Provenance Reward...")
-        r_prov, info_prov = provenance_reward_names_only_totals_only(payload, traj)
-        print(f"[DEBUG] Provenance Result: r_prov={r_prov}")
+        try:
+            r_prov, info_prov = provenance_reward_names_only_totals_only(payload, traj)
+        except Exception as e:
+            r_prov, info_prov = 0.0, {"reason": f"provenance_exception: {type(e).__name__}: {e}"}
 
-    # Weighted Sum (smooth rewards)
-    # Macro accuracy is paramount -> 0.45
-    # Variety Heuristic -> 0.20
-    # LLM Variety -> 0.15
-    # Provenance -> 0.20
     final_score = (
-        (0.45 * r_macro)
+        (0.60 * r_macro)
         + (0.20 * r_variety_h)
-        + (0.15 * r_variety_llm)
+        # + (0.15 * r_variety_llm)
         + (0.20 * r_prov)
     )
-        
+
     info = {
         "r_schema": r_schema,
         "r_macro": r_macro,
@@ -540,10 +514,10 @@ async def combined_reward_v2(payload: dict, scenario_data: Scenario, traj):
         "r_variety_llm": r_variety_llm,
         "r_provenance": r_prov,
         "macro_info": info_macro,
-        "variety_info": info_variety
+        "variety_info": info_variety,
+        "provenance_info": info_prov,
     }
-    info["provenance_info"] = info_prov
-    
+
     return final_score, info
 
 # ============================================================================
@@ -557,7 +531,7 @@ class FitnessScenario(BaseModel):
     step: int
     scenario: Scenario
 
-@weave.op  # Disabled due to token usage validation errors with local vLLM
+@weave.op
 async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> ProjectTrajectory:
     scenario = fitness_scenario.scenario
     traj = ProjectTrajectory(
@@ -565,8 +539,8 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
         messages_and_choices=[],
         metadata={"scenario_id": str(scenario.id), "step": fitness_scenario.step},
     )
-    
-    final_answer = None
+
+    final_answer: FinalAnswer | None = None
 
     @tool
     def recipe_semantic_search(meal_query: str, k: int = 5) -> str:
@@ -591,70 +565,98 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
       )
       return json.dumps(res_list)
 
+    # ✅ MITIGATION #1: accept dict, not str (dramatically fewer tool-call failures)
     @tool
-    def return_final_answer_tool(answer: str) -> dict:
-        """Return the final answer (daily meal plan) in the correct format """
+    def return_final_answer_tool(answer: dict) -> dict:
+        """Return the final answer (daily meal plan) in the correct format."""
         nonlocal final_answer
-        payload = get_payload(answer)
-        final_answer = FinalAnswer(answer=payload)
+        payload = get_payload(answer)  # defensive, but should already be dict
+        final_answer = FinalAnswer(answer=payload)  # pydantic validation here
         return final_answer.model_dump()
 
     chat_model = init_chat_model(f"{model.name}", temperature=0.2)
     react_agent = create_react_agent(chat_model, [recipe_semantic_search, return_final_answer_tool])
-    
+
+    # ✅ MITIGATION #2: one-shot "repair" attempt if no final tool call happened
+    async def _attempt_repair_if_missing_final():
+        nonlocal final_answer
+        if final_answer is not None:
+            return
+
+        traj.messages_and_choices.append({"role": "system", "content": "[NO_FINAL_TOOL_CALL] attempting repair invoke"})
+
+        repair_prompt = """
+You MUST now output ONLY a single tool call to return_final_answer_tool.
+Do NOT write any normal text.
+The tool argument must be a JSON OBJECT (a dict) with schema: {"meals":[{...}]}.
+"""
+
+        try:
+            await react_agent.ainvoke(
+                {"messages": [
+                    SystemMessage(content=PLANNER_PROMPT),
+                    HumanMessage(content=scenario.question),
+                    SystemMessage(content=repair_prompt),
+                ]},
+                config={"configurable": {"thread_id": str(uuid.uuid4())}, "recursion_limit": 20}
+            )
+        except Exception as e:
+            traj.messages_and_choices.append({"role": "system", "content": f"[REPAIR_EXCEPTION] {type(e).__name__}: {e}"})
+
     try:
-        # Retry loop for Pydantic validation errors (common with tool call parsing)
         max_retries = 3
         res = None
-        
+
         for attempt in range(max_retries):
             try:
                 res = await react_agent.ainvoke(
                     {"messages": [SystemMessage(content=PLANNER_PROMPT), HumanMessage(content=scenario.question)]},
                     config={"configurable": {"thread_id": str(uuid.uuid4())}, "recursion_limit": 20}
                 )
-                break # Success
+                break
             except ValidationError as ve:
-                # Catch "Input should be a valid dictionary" error
                 if attempt < max_retries - 1:
                     print(f"⚠️ Validation error in rollout (attempt {attempt+1}/{max_retries}): {ve}. Retrying...")
                     continue
                 else:
                     raise ve
             except Exception as e:
-                # Check for the specific stringified-dict error in the exception message if it's wrapped
                 err_str = str(e)
                 if "Input should be a valid dictionary" in err_str and attempt < max_retries - 1:
                      print(f"⚠️ Tool call parsing error (attempt {attempt+1}/{max_retries}): {e}. Retrying...")
                      continue
                 raise e
-        
+
+        # ✅ MITIGATION #2: repair if model finished without calling final tool
+        if final_answer is None:
+            await _attempt_repair_if_missing_final()
+
         if final_answer:
             payload = get_payload(final_answer)
             score, info = await combined_reward_v2(payload, scenario, traj)
             traj.reward = score
             traj.final_answer = final_answer
-            
+
             # Only store numeric metrics (ART can't handle dicts)
             for key, value in info.items():
                 if isinstance(value, (int, float)):
                     traj.metrics[key] = value
                 elif isinstance(value, dict):
-                    # Flatten nested dicts with prefix
                     for sub_key, sub_value in value.items():
                         if isinstance(sub_value, (int, float)):
                             traj.metrics[f"{key}_{sub_key}"] = sub_value
-            
+
             traj.metrics["correct"] = score
             print(f"Step {fitness_scenario.step} | ID {scenario.id} | Reward: {score:.3f}")
         else:
             traj.reward = -0.1
             traj.metrics["correct"] = 0.0
-            
+            traj.messages_and_choices.append({"role": "system", "content": "[NO_FINAL_TOOL_CALL] giving -0.1"})
+
     except Exception as e:
         print(f"Error in rollout: {e}")
-        traj.reward = -0.1
-        traj.messages_and_choices.append({"role": "system", "content": f"Error: {e}"})
+        traj.reward = 0.0
+        traj.messages_and_choices.append({"role": "system", "content": f"[EXCEPTION] {type(e).__name__}: {e}"})
 
     return traj
 
@@ -662,79 +664,20 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
 # MAIN
 # ============================================================================
 
- # =========================================================================
-    # VALIDATION FUNCTION
-    # =========================================================================
-    async def run_validation(step: int):
-        """Run validation on held-out test scenarios."""
-        print(f"\n🔍 Running validation at step {step}...")
-        
-        # Sample validation scenarios (or use all if small enough)
-        val_sample = val_scenarios[:TRAINING_VALIDATION_SAMPLES] if len(val_scenarios) > TRAINING_VALIDATION_SAMPLES else val_scenarios
-        
-        val_groups = []
-        for scenario in val_sample:
-            # Only 1 rollout per scenario for validation (no need for multiple)
-            val_groups.append(art.TrajectoryGroup(
-                [wrap_rollout(model, rollout)(model, FitnessScenario(step=step, scenario=scenario))]
-            ))
-        
-        finished_val_groups = await art.gather_trajectory_groups(
-            val_groups, 
-            pbar_desc="validation",
-            max_exceptions=len(val_sample)
-        )
-        
-        # Calculate validation metrics
-        total_reward = 0.0
-        total_correct = 0.0
-        count = 0
-        
-        for group in finished_val_groups:
-            for traj in group:
-                total_reward += traj.reward
-                total_correct += traj.metrics.get("correct", 0.0)
-                count += 1
-        
-        avg_reward = total_reward / count if count > 0 else 0.0
-        avg_correct = total_correct / count if count > 0 else 0.0
-        
-        print(f"📈 Validation Results (step {step}):")
-        print(f"   Avg Reward: {avg_reward:.4f}")
-        print(f"   Avg Correct: {avg_correct:.4f}")
-        print(f"   Samples: {count}")
-        
-        # Log to W&B if available
-        if os.getenv("WANDB_API_KEY"):
-            try:
-                import wandb
-                wandb.log({
-                    "val/avg_reward": avg_reward,
-                    "val/avg_correct": avg_correct,
-                    "val/num_samples": count,
-                    "step": step,
-                })
-            except Exception as e:
-                print(f"⚠️  W&B logging error: {e}")
-        
-        return {"avg_reward": avg_reward, "avg_correct": avg_correct, "count": count}
-
 async def main():
     global model, backend
     set_all_seeds(SEED)
-    
-    # ... [GPU setup code stays the same] ...
-    
+
     print(f"🤖 Initializing model: {MODEL_NAME}")
     print(f"   Base model: {BASE_MODEL_NAME}")
     print(f"   Project: {PROJECT_NAME}")
-    
+
     model = art.TrainableModel(
-        name=MODEL_NAME, 
+        name=MODEL_NAME,
         project=PROJECT_NAME,
         base_model=BASE_MODEL_NAME
     )
-    
+
     model._internal_config = art.dev.InternalModelConfig(
         init_args=art.dev.InitArgs(
             max_seq_length=MAX_SEQ_LENGTH,
@@ -743,14 +686,14 @@ async def main():
             gpu_memory_utilization=GPU_MEMORY_UTILIZATION,
         ),
     )
-    
+
     print("🔧 Initializing backend...")
     backend = LocalBackend(in_process=True, path="./.art")
-    
+
     print("📝 Registering model with backend...")
     await model.register(backend)
     print("✅ Model registered successfully!")
-    
+
     if os.getenv("WANDB_API_KEY"):
         weave.init(model.project, settings={"print_call_link": False})
 
@@ -760,7 +703,7 @@ async def main():
     # Split scenarios into train and validation
     train_scenarios = [s for s in scenarios_list if s.split == "train"]
     val_scenarios = [s for s in scenarios_list if s.split == "test"]
-    
+
     print(f"📊 Training scenarios: {len(train_scenarios)}")
     print(f"📊 Validation scenarios: {len(val_scenarios)}")
 
@@ -770,43 +713,39 @@ async def main():
     async def run_validation(step: int):
         """Run validation on held-out test scenarios."""
         print(f"\n🔍 Running validation at step {step}...")
-        
-        # Sample validation scenarios (or use all if small enough)
+
         val_sample = val_scenarios[:TRAINING_VALIDATION_SAMPLES] if len(val_scenarios) > TRAINING_VALIDATION_SAMPLES else val_scenarios
-        
+
         val_groups = []
         for scenario in val_sample:
-            # Only 1 rollout per scenario for validation (no need for multiple)
             val_groups.append(art.TrajectoryGroup(
                 [wrap_rollout(model, rollout)(model, FitnessScenario(step=step, scenario=scenario))]
             ))
-        
+
         finished_val_groups = await art.gather_trajectory_groups(
-            val_groups, 
+            val_groups,
             pbar_desc="validation",
             max_exceptions=len(val_sample)
         )
-        
-        # Calculate validation metrics
+
         total_reward = 0.0
         total_correct = 0.0
         count = 0
-        
+
         for group in finished_val_groups:
             for traj in group:
                 total_reward += traj.reward
                 total_correct += traj.metrics.get("correct", 0.0)
                 count += 1
-        
+
         avg_reward = total_reward / count if count > 0 else 0.0
         avg_correct = total_correct / count if count > 0 else 0.0
-        
+
         print(f"📈 Validation Results (step {step}):")
         print(f"   Avg Reward: {avg_reward:.4f}")
         print(f"   Avg Correct: {avg_correct:.4f}")
         print(f"   Samples: {count}")
-        
-        # Log to W&B if available
+
         if os.getenv("WANDB_API_KEY"):
             try:
                 import wandb
@@ -818,7 +757,7 @@ async def main():
                 })
             except Exception as e:
                 print(f"⚠️  W&B logging error: {e}")
-        
+
         return {"avg_reward": avg_reward, "avg_correct": avg_correct, "count": count}
 
     # =========================================================================
@@ -830,68 +769,57 @@ async def main():
         num_epochs=TRAINING_NUM_EPOCHS,
         initial_step=await model.get_step()
     )
-    
+
     for batch in training_iterator:
         current_step = batch.step
         print(f"\n{'='*60}")
         print(f"Step {current_step} | Epoch {batch.epoch}")
         print(f"{'='*60}")
-        
-        # Check max steps
+
         if current_step >= TRAINING_MAX_STEPS:
             print(f"🛑 Reached max_steps ({TRAINING_MAX_STEPS}), stopping training.")
             break
-        
-        # Create trajectory groups for training
+
         groups = []
         for item in batch.items:
             groups.append(art.TrajectoryGroup(
-                (wrap_rollout(model, rollout)(model, FitnessScenario(step=current_step, scenario=item)) 
+                (wrap_rollout(model, rollout)(model, FitnessScenario(step=current_step, scenario=item))
                  for _ in range(TRAINING_ROLLOUTS_PER_GROUP))
             ))
-        
-        # Gather training trajectories
+
         finished_groups = await art.gather_trajectory_groups(
-            groups, 
+            groups,
             pbar_desc="training",
             max_exceptions=TRAINING_ROLLOUTS_PER_GROUP * len(batch.items)
         )
-        
-        # Calculate training metrics for this step
+
         train_rewards = []
         for group in finished_groups:
             for traj in group:
                 train_rewards.append(traj.reward)
-        
+
         if train_rewards:
             avg_train_reward = sum(train_rewards) / len(train_rewards)
             print(f"📊 Training batch avg reward: {avg_train_reward:.4f}")
-        
-        # Train the model
+
         await model.train(
-            finished_groups, 
+            finished_groups,
             config=art.TrainConfig(learning_rate=TRAINING_LEARNING_RATE)
         )
         print(f"✅ Training step {current_step} complete")
-        
-        # Run validation periodically
+
         if current_step > 0 and current_step % TRAINING_VALIDATION_EVERY == 0:
-            val_results = await run_validation(current_step)
-    
-    # Final validation
+            _ = await run_validation(current_step)
+
     print("\n" + "="*60)
     print("🏁 Training complete! Running final validation...")
     print("="*60)
     final_val = await run_validation(current_step)
-    
+
     print("\n🎉 Training finished!")
     print(f"   Final validation reward: {final_val['avg_reward']:.4f}")
     print(f"   Final validation correct: {final_val['avg_correct']:.4f}")
 
-
-
-
 if __name__ == "__main__":
     import asyncio
     asyncio.run(main())
-
