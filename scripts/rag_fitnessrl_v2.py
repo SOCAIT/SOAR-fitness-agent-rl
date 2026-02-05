@@ -321,7 +321,20 @@ def extract_meal_names(data):
 # ============================================================================
 
 # Provenance reward (tool-macro consistency)
-from src.env.provenance_reward import provenance_reward_names_only_totals_only
+try:
+    from src.env.provenance_reward import provenance_reward_names_only_totals_only
+except ModuleNotFoundError:
+    import importlib.util
+
+    _prov_path = project_root / "src" / "env" / "provenance_reward.py"
+    if not _prov_path.exists():
+        raise
+    _spec = importlib.util.spec_from_file_location("provenance_reward", _prov_path)
+    if _spec is None or _spec.loader is None:
+        raise
+    _prov_module = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_prov_module)
+    provenance_reward_names_only_totals_only = _prov_module.provenance_reward_names_only_totals_only
 
 # Utils
 def _extract_first_json_segment(s: str) -> str | None:
