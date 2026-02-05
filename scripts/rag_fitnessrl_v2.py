@@ -17,6 +17,8 @@ PREREQUISITES:
    - WANDB_API_KEY (optional, for logging)
 """
 
+import uuid
+
 ## CONFIGURATION
 random_string = str(uuid.uuid4())
 BASE_MODEL_NAME = "Qwen/Qwen2.5-14B-Instruct"
