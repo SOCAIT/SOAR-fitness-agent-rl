@@ -20,7 +20,7 @@ PREREQUISITES:
 ## CONFIGURATION
 
 BASE_MODEL_NAME = "Qwen/Qwen2.5-14B-Instruct"
-MODEL_NAME = "fitness-agent-langgraph-14B-qwen2.5-002"
+MODEL_NAME = "fitness-agent-langgraph-14B-qwen2.5-003"
 PROJECT_NAME = "fitness-agent-langgraph-rag-v2"
 SEED = 42
 TENSOR_PARALLEL_SIZE = 1
@@ -29,9 +29,9 @@ MAX_SEQ_LENGTH = 8192
 ENFORCE_EAGER = True
 
 # TRAINING CONFIGURATION
-TRAINING_GROUPS_PER_STEP = 4
+TRAINING_GROUPS_PER_STEP = 2
 TRAINING_NUM_EPOCHS = 3
-TRAINING_ROLLOUTS_PER_GROUP = 12
+TRAINING_ROLLOUTS_PER_GROUP = 8
 TRAINING_LEARNING_RATE = 1e-5
 TRAINING_MAX_STEPS = 150
 TRAINING_VALIDATION_EVERY = 10
@@ -61,7 +61,7 @@ from statistics import median
 # Third-party imports
 from dotenv import load_dotenv
 from datasets import Dataset, Features, Sequence, Value, load_dataset
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ValidationError
 from tqdm import tqdm
 from tenacity import retry, stop_after_attempt
 
@@ -603,10 +603,31 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
     react_agent = create_react_agent(chat_model, [recipe_semantic_search, return_final_answer_tool])
     
     try:
-        res = await react_agent.ainvoke(
-            {"messages": [SystemMessage(content=PLANNER_PROMPT), HumanMessage(content=scenario.question)]},
-            config={"configurable": {"thread_id": str(uuid.uuid4())}, "recursion_limit": 20}
-        )
+        # Retry loop for Pydantic validation errors (common with tool call parsing)
+        max_retries = 3
+        res = None
+        
+        for attempt in range(max_retries):
+            try:
+                res = await react_agent.ainvoke(
+                    {"messages": [SystemMessage(content=PLANNER_PROMPT), HumanMessage(content=scenario.question)]},
+                    config={"configurable": {"thread_id": str(uuid.uuid4())}, "recursion_limit": 20}
+                )
+                break # Success
+            except ValidationError as ve:
+                # Catch "Input should be a valid dictionary" error
+                if attempt < max_retries - 1:
+                    print(f"⚠️ Validation error in rollout (attempt {attempt+1}/{max_retries}): {ve}. Retrying...")
+                    continue
+                else:
+                    raise ve
+            except Exception as e:
+                # Check for the specific stringified-dict error in the exception message if it's wrapped
+                err_str = str(e)
+                if "Input should be a valid dictionary" in err_str and attempt < max_retries - 1:
+                     print(f"⚠️ Tool call parsing error (attempt {attempt+1}/{max_retries}): {e}. Retrying...")
+                     continue
+                raise e
         
         if final_answer:
             payload = get_payload(final_answer)
