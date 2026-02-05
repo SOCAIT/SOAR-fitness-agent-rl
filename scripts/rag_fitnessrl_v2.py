@@ -696,24 +696,30 @@ async def main():
     from art.utils import iterate_dataset
     from art.langgraph import wrap_rollout
 
+    # CORRECT - fixed code:
     training_iterator = iterate_dataset(
         [s for s in scenarios_list if s.split == "train"],
         groups_per_step=TRAINING_GROUPS_PER_STEP,
         num_epochs=TRAINING_NUM_EPOCHS,
-        max_steps=TRAINING_MAX_STEPS,
         initial_step=await model.get_step()
     )
-    
+
     for batch in training_iterator:
         print(f"Step {batch.step}")
+        
+        # Stop if we've hit max steps
+        if batch.step >= TRAINING_MAX_STEPS:
+            print(f"Reached max_steps ({TRAINING_MAX_STEPS}), stopping training.")
+            break
+        
         groups = []
         for item in batch.items:
             groups.append(art.TrajectoryGroup(
-                (wrap_rollout(model, rollout)(model, FitnessScenario(step=batch.step, scenario=item.model_dump())) for _ in range(TRAINING_ROLLOUTS_PER_GROUP))
+                (wrap_rollout(model, rollout)(model, FitnessScenario(step=batch.step, scenario=item)) for _ in range(TRAINING_ROLLOUTS_PER_GROUP))
             ))
             
         finished_groups = await art.gather_trajectory_groups(groups, max_exceptions=5)
-        await model.train(finished_groups, config=art.TrainConfig(learning_rate=1e-5))
+        await model.train(finished_groups, config=art.TrainConfig(learning_rate=TRAINING_LEARNING_RATE))
 
 if __name__ == "__main__":
     import asyncio
