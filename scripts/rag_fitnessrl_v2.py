@@ -23,6 +23,7 @@ import uuid
 random_string = str(uuid.uuid4())
 BASE_MODEL_NAME = "Qwen/Qwen2.5-14B-Instruct"
 MODEL_NAME = f"fitness-agent-langgraph-14B-qwen2.5-003-{random_string}"
+MODEL_NAME = f"fitness-agent-langgraph-14B-qwen2.5-003-d5110cc3-2d3f-4617-a3df-c04324a56440"
 PROJECT_NAME = "fitness-agent-langgraph-rag-v2"
 SEED = 42
 TENSOR_PARALLEL_SIZE = 1
