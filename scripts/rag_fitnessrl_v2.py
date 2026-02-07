@@ -503,10 +503,10 @@ async def combined_reward_v2(payload: dict, scenario_data: Scenario, traj):
             r_prov, info_prov = 0.0, {"reason": f"provenance_exception: {type(e).__name__}: {e}"}
 
     final_score = (
-        (0.60 * r_macro)
-        + (0.20 * r_variety_h)
+        (0.70 * r_macro)
+        + (0.30 * r_variety_h)
         # + (0.15 * r_variety_llm)
-        + (0.20 * r_prov)
+        #+ (0.20 * r_prov)
     )
 
     info = {

@@ -49,8 +49,8 @@ The easiest way to get started is using the provided `train_rl.sh` script, which
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/fitness-reasoning-rl-agent.git
-cd fitness-reasoning-rl-agent
+git clone https://github.com/SOCAIT/SOAR-fitness-agent-rl.git
+cd SOAR-fitness-agent-rl
 
 # Create a .env file with your API keys
 cat > .env << EOF
