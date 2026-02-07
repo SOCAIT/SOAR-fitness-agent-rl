@@ -638,6 +638,62 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
 # MAIN
 # ============================================================================
 
+ # =========================================================================
+    # VALIDATION FUNCTION
+    # =========================================================================
+    async def run_validation(step: int):
+        """Run validation on held-out test scenarios."""
+        print(f"\n🔍 Running validation at step {step}...")
+        
+        # Sample validation scenarios (or use all if small enough)
+        val_sample = val_scenarios[:TRAINING_VALIDATION_SAMPLES] if len(val_scenarios) > TRAINING_VALIDATION_SAMPLES else val_scenarios
+        
+        val_groups = []
+        for scenario in val_sample:
+            # Only 1 rollout per scenario for validation (no need for multiple)
+            val_groups.append(art.TrajectoryGroup(
+                [wrap_rollout(model, rollout)(model, FitnessScenario(step=step, scenario=scenario))]
+            ))
+        
+        finished_val_groups = await art.gather_trajectory_groups(
+            val_groups, 
+            pbar_desc="validation",
+            max_exceptions=len(val_sample)
+        )
+        
+        # Calculate validation metrics
+        total_reward = 0.0
+        total_correct = 0.0
+        count = 0
+        
+        for group in finished_val_groups:
+            for traj in group:
+                total_reward += traj.reward
+                total_correct += traj.metrics.get("correct", 0.0)
+                count += 1
+        
+        avg_reward = total_reward / count if count > 0 else 0.0
+        avg_correct = total_correct / count if count > 0 else 0.0
+        
+        print(f"📈 Validation Results (step {step}):")
+        print(f"   Avg Reward: {avg_reward:.4f}")
+        print(f"   Avg Correct: {avg_correct:.4f}")
+        print(f"   Samples: {count}")
+        
+        # Log to W&B if available
+        if os.getenv("WANDB_API_KEY"):
+            try:
+                import wandb
+                wandb.log({
+                    "val/avg_reward": avg_reward,
+                    "val/avg_correct": avg_correct,
+                    "val/num_samples": count,
+                    "step": step,
+                })
+            except Exception as e:
+                print(f"⚠️  W&B logging error: {e}")
+        
+        return {"avg_reward": avg_reward, "avg_correct": avg_correct, "count": count}
 async def main():
     global model, backend
     set_all_seeds(SEED)
