@@ -336,6 +336,25 @@ except Exception as e:
             print(f"Meals: {meals}")
 
             tool_recipes: Dict[str, Dict[str, float]] = {}
+            # Prefer metadata cache if available.
+            meta_recipes = []
+            try:
+                meta_recipes = traj.metadata.get("tool_recipes", []) or []
+            except Exception:
+                meta_recipes = []
+            if isinstance(meta_recipes, list):
+                for item in meta_recipes:
+                    if not isinstance(item, dict):
+                        continue
+                    name = str(item.get("name", "")).strip().lower()
+                    if not name:
+                        continue
+                    tool_recipes[name] = {
+                        "calories": float(item.get("calories", 0) or 0),
+                        "protein": float(item.get("protein", 0) or 0),
+                        "carbs": float(item.get("carbs", 0) or 0),
+                        "fat": float(item.get("fat", 0) or 0),
+                    }
             for msg in getattr(traj, "messages_and_choices", []) or []:
                 if not isinstance(msg, dict) or msg.get("role") != "tool_log":
                     continue
@@ -350,6 +369,11 @@ except Exception as e:
                         results = parsed.get("result", []) or []
                     elif isinstance(parsed.get("end"), dict) and parsed["end"].get("tool") == "recipe_semantic_search":
                         results = parsed["end"].get("result", []) or []
+                if isinstance(results, str):
+                    try:
+                        results = json.loads(results)
+                    except Exception:
+                        results = []
                 for item in results:
                     if not isinstance(item, dict):
                         continue
@@ -550,6 +574,37 @@ def verify_variety_heuristic(payload: dict) -> Tuple[float, Dict]:
 
     return score, {"unique_meals": len(unique_names), "total_meals": num_meals, "reason": reason or ["ok"]}
 
+# 4. Tool Usage Reward (did the agent use recipe search?)
+def verify_tool_usage(traj) -> Tuple[float, Dict]:
+    tool_calls = []
+    # First, check metadata cache (fast path).
+    try:
+        cached = traj.metadata.get("tool_recipes", []) or []
+        if isinstance(cached, list) and len(cached) > 0:
+            return 1.0, {"used_recipe_search": True, "tool_calls": ["recipe_semantic_search"], "source": "metadata"}
+    except Exception:
+        pass
+
+    for msg in getattr(traj, "messages_and_choices", []) or []:
+        if not isinstance(msg, dict) or msg.get("role") != "tool_log":
+            continue
+        content = msg.get("content", "")
+        try:
+            parsed = json.loads(content)
+        except Exception:
+            continue
+        if isinstance(parsed, dict):
+            if parsed.get("tool") == "recipe_search":
+                tool_calls.append("recipe_semantic_search")
+            elif isinstance(parsed.get("end"), dict):
+                end_tool = parsed["end"].get("tool")
+                if end_tool:
+                    tool_calls.append(end_tool)
+
+    used_recipe = any(t == "recipe_semantic_search" for t in tool_calls)
+    score = 1.0 if used_recipe else 0.0
+    return score, {"used_recipe_search": used_recipe, "tool_calls": tool_calls}
+
 # 4. LLM Variety Judge
 class VarietyJudgeResponse(BaseModel):
     score: float
@@ -608,12 +663,16 @@ async def combined_reward_v2(payload: dict, scenario_data: Scenario, traj):
         except Exception as e:
             r_prov, info_prov = 0.0, {"reason": f"provenance_exception: {type(e).__name__}: {e}"}
 
+    # 6. Tool usage reward
+    r_tool, info_tool = verify_tool_usage(traj)
+
     final_score = (
-        (0.50 * r_macro)
+        (0.45 * r_macro)
         #+ (0.30 * r_variety_h)
         + (0.20 * r_variety_llm)
         #+ (0.20 * r_prov)
-        + (0.30 * r_prov)
+        + (0.25 * r_prov)
+        + (0.10 * r_tool)
     )
 
     info = {
@@ -622,9 +681,11 @@ async def combined_reward_v2(payload: dict, scenario_data: Scenario, traj):
         "r_variety_h": r_variety_h,
         "r_variety_llm": r_variety_llm,
         "r_provenance": r_prov,
+        "r_tool_usage": r_tool,
         "macro_info": info_macro,
         "variety_info": info_variety,
         "provenance_info": info_prov,
+        "tool_usage_info": info_tool,
     }
 
     return final_score, info
@@ -659,6 +720,15 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
           query={"top_k": k, "inputs": {'text': meal_query}}
       )
       res_list = extract_meal_names(results)
+      # Cache tool outputs in trajectory metadata for provenance.
+      try:
+          cached = traj.metadata.get("tool_recipes", [])
+          if not isinstance(cached, list):
+              cached = []
+          cached.extend(res_list)
+          traj.metadata["tool_recipes"] = cached
+      except Exception:
+          pass
       traj.messages_and_choices.append(
           {
               "role": "tool_log",
