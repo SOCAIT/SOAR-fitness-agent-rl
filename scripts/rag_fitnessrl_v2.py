@@ -437,7 +437,7 @@ except Exception as e:
                 )
 
             print(f"Per meal: {per_meal}")
-            print(f"Missing names: {missing_names}")s
+            print(f"Missing names: {missing_names}")
 
             if not per_meal:
                 return 0.0, {"reason": "no_matching_meals", "missing_names": missing_names}
