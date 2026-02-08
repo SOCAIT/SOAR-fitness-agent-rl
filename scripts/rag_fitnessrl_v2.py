@@ -333,6 +333,8 @@ except Exception as e:
             if not isinstance(meals, list) or not meals:
                 return 0.0, {"reason": "no_meals"}
 
+            print(f"Meals: {meals}")
+
             tool_recipes: Dict[str, Dict[str, float]] = {}
             for msg in getattr(traj, "messages_and_choices", []) or []:
                 if not isinstance(msg, dict) or msg.get("role") != "tool_log":
@@ -360,6 +362,8 @@ except Exception as e:
                         "carbs": float(item.get("carbs", 0) or 0),
                         "fat": float(item.get("fat", 0) or 0),
                     }
+
+            print(f"Tool recipes: {tool_recipes}")
 
             if not tool_recipes:
                 return 0.0, {"reason": "no_tool_recipes"}
