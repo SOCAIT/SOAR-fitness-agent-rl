@@ -335,6 +335,9 @@ except Exception as e:
 
             print(f"Meals: {meals}")
 
+            def _norm_name(name: str) -> str:
+                return re.sub(r"[^a-z0-9]+", " ", name.lower()).strip()
+
             tool_recipes: Dict[str, Dict[str, float]] = {}
             # Prefer metadata cache if available.
             meta_recipes = []
@@ -346,14 +349,15 @@ except Exception as e:
                 for item in meta_recipes:
                     if not isinstance(item, dict):
                         continue
-                    name = str(item.get("name", "")).strip().lower()
+                    name = str(item.get("name", "")).strip()
                     if not name:
                         continue
-                    tool_recipes[name] = {
+                    tool_recipes[_norm_name(name)] = {
                         "calories": float(item.get("calories", 0) or 0),
                         "protein": float(item.get("protein", 0) or 0),
                         "carbs": float(item.get("carbs", 0) or 0),
                         "fat": float(item.get("fat", 0) or 0),
+                        "raw_name": name,
                     }
             for msg in getattr(traj, "messages_and_choices", []) or []:
                 if not isinstance(msg, dict) or msg.get("role") != "tool_log":
@@ -377,14 +381,15 @@ except Exception as e:
                 for item in results:
                     if not isinstance(item, dict):
                         continue
-                    name = str(item.get("name", "")).strip().lower()
+                    name = str(item.get("name", "")).strip()
                     if not name:
                         continue
-                    tool_recipes[name] = {
+                    tool_recipes[_norm_name(name)] = {
                         "calories": float(item.get("calories", 0) or 0),
                         "protein": float(item.get("protein", 0) or 0),
                         "carbs": float(item.get("carbs", 0) or 0),
                         "fat": float(item.get("fat", 0) or 0),
+                        "raw_name": name,
                     }
 
             print(f"Tool recipes: {tool_recipes}")
@@ -395,16 +400,24 @@ except Exception as e:
             per_meal = []
             missing_names = []
             tolerance = 0.10  # 10% relative error tolerance
+            name_match_cutoff = 0.92
+            tool_names = list(tool_recipes.keys())
 
             for meal in meals:
                 if not isinstance(meal, dict):
                     continue
-                name = str(meal.get("name", "")).strip().lower()
-                if not name or name not in tool_recipes:
+                name = str(meal.get("name", "")).strip()
+                norm_name = _norm_name(name)
+                match_key = norm_name if norm_name in tool_recipes else None
+                if match_key is None and tool_names:
+                    best = difflib.get_close_matches(norm_name, tool_names, n=1, cutoff=name_match_cutoff)
+                    if best:
+                        match_key = best[0]
+                if not match_key:
                     missing_names.append(meal.get("name", ""))
                     continue
 
-                base = tool_recipes[name]
+                base = tool_recipes[match_key]
                 quantity = float(meal.get("quantity", 0) or 0)
                 expected = {
                     "calories": base["calories"] * quantity,
@@ -431,6 +444,7 @@ except Exception as e:
                 per_meal.append(
                     {
                         "name": meal.get("name", ""),
+                        "matched_name": base.get("raw_name", ""),
                         "mean_error": mean_err,
                         "score": meal_score,
                     }
