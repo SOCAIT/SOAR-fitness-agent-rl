@@ -36,9 +36,9 @@ TRAINING_GROUPS_PER_STEP = 4
 TRAINING_NUM_EPOCHS = 3
 TRAINING_ROLLOUTS_PER_GROUP = 8
 TRAINING_LEARNING_RATE = 1e-5
-TRAINING_MAX_STEPS = 150
+TRAINING_MAX_STEPS = 300
 TRAINING_VALIDATION_EVERY = 10
-TRAINING_VALIDATION_SAMPLES = 10
+TRAINING_VALIDATION_SAMPLES = 20
 
 
 # Import unsloth FIRST before any other ML libraries to avoid circular import issues
@@ -504,9 +504,9 @@ async def combined_reward_v2(payload: dict, scenario_data: Scenario, traj):
             r_prov, info_prov = 0.0, {"reason": f"provenance_exception: {type(e).__name__}: {e}"}
 
     final_score = (
-        (0.70 * r_macro)
-        + (0.30 * r_variety_h)
-        # + (0.15 * r_variety_llm)
+        (0.80 * r_macro)
+        #+ (0.30 * r_variety_h)
+        + (0.20 * r_variety_llm)
         #+ (0.20 * r_prov)
     )
 
