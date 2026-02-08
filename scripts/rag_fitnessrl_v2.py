@@ -325,7 +325,104 @@ try:
     print("[DEBUG] Successfully imported provenance_reward from src.env")
 except Exception as e:
     print(f"[ERROR] Failed to import provenance_reward: {e}")
-    provenance_reward_names_only_totals_only = None
+
+    def provenance_reward_names_only_totals_only(payload: dict, traj) -> Tuple[float, Dict]:
+        """Fallback provenance reward based on tool logs and macro consistency."""
+        try:
+            meals = payload.get("meals", [])
+            if not isinstance(meals, list) or not meals:
+                return 0.0, {"reason": "no_meals"}
+
+            tool_recipes: Dict[str, Dict[str, float]] = {}
+            for msg in getattr(traj, "messages_and_choices", []) or []:
+                if not isinstance(msg, dict) or msg.get("role") != "tool_log":
+                    continue
+                content = msg.get("content", "")
+                try:
+                    parsed = json.loads(content)
+                except Exception:
+                    continue
+                results = []
+                if isinstance(parsed, dict):
+                    if parsed.get("tool") == "recipe_search":
+                        results = parsed.get("result", []) or []
+                    elif isinstance(parsed.get("end"), dict) and parsed["end"].get("tool") == "recipe_semantic_search":
+                        results = parsed["end"].get("result", []) or []
+                for item in results:
+                    if not isinstance(item, dict):
+                        continue
+                    name = str(item.get("name", "")).strip().lower()
+                    if not name:
+                        continue
+                    tool_recipes[name] = {
+                        "calories": float(item.get("calories", 0) or 0),
+                        "protein": float(item.get("protein", 0) or 0),
+                        "carbs": float(item.get("carbs", 0) or 0),
+                        "fat": float(item.get("fat", 0) or 0),
+                    }
+
+            if not tool_recipes:
+                return 0.0, {"reason": "no_tool_recipes"}
+
+            per_meal = []
+            missing_names = []
+            tolerance = 0.10  # 10% relative error tolerance
+
+            for meal in meals:
+                if not isinstance(meal, dict):
+                    continue
+                name = str(meal.get("name", "")).strip().lower()
+                if not name or name not in tool_recipes:
+                    missing_names.append(meal.get("name", ""))
+                    continue
+
+                base = tool_recipes[name]
+                quantity = float(meal.get("quantity", 0) or 0)
+                expected = {
+                    "calories": base["calories"] * quantity,
+                    "protein": base["protein"] * quantity,
+                    "carbs": base["carbs"] * quantity,
+                    "fat": base["fat"] * quantity,
+                }
+                provided = {
+                    "calories": float(meal.get("calories", 0) or 0),
+                    "protein": float(meal.get("proteins", 0) or 0),
+                    "carbs": float(meal.get("carbs", 0) or 0),
+                    "fat": float(meal.get("fats", 0) or 0),
+                }
+
+                errors = {}
+                for key in ["calories", "protein", "carbs", "fat"]:
+                    exp = expected[key]
+                    if exp <= 0:
+                        continue
+                    errors[key] = abs(provided[key] - exp) / exp
+
+                mean_err = sum(errors.values()) / len(errors) if errors else 1.0
+                meal_score = max(0.0, 1.0 - (mean_err / tolerance))
+                per_meal.append(
+                    {
+                        "name": meal.get("name", ""),
+                        "mean_error": mean_err,
+                        "score": meal_score,
+                    }
+                )
+
+            if not per_meal:
+                return 0.0, {"reason": "no_matching_meals", "missing_names": missing_names}
+
+            avg_meal_score = sum(m["score"] for m in per_meal) / len(per_meal)
+            missing_penalty = len(missing_names) / max(1, len(meals))
+            score = max(0.0, avg_meal_score * (1.0 - missing_penalty))
+
+            info = {
+                "tool_recipes_count": len(tool_recipes),
+                "missing_names": missing_names,
+                "per_meal": per_meal,
+            }
+            return score, info
+        except Exception as inner_e:
+            return 0.0, {"reason": f"provenance_fallback_exception: {type(inner_e).__name__}: {inner_e}"}
 
 # Utils
 def _extract_first_json_segment(s: str) -> str | None:
@@ -504,10 +601,11 @@ async def combined_reward_v2(payload: dict, scenario_data: Scenario, traj):
             r_prov, info_prov = 0.0, {"reason": f"provenance_exception: {type(e).__name__}: {e}"}
 
     final_score = (
-        (0.80 * r_macro)
+        (0.50 * r_macro)
         #+ (0.30 * r_variety_h)
         + (0.20 * r_variety_llm)
         #+ (0.20 * r_prov)
+        + (0.30 * r_prov)
     )
 
     info = {
