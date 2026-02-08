@@ -696,12 +696,12 @@ async def combined_reward_v2(payload: dict, scenario_data: Scenario, traj):
     print(f"Info tool: {info_tool}")
 
     final_score = (
-        (0.45 * r_macro)
+        (0.40 * r_macro)
         #+ (0.30 * r_variety_h)
-        + (0.20 * r_variety_llm)
+        + (0.10 * r_variety_llm)
         #+ (0.20 * r_prov)
-        + (0.25 * r_prov)
-        + (0.10 * r_tool)
+        + (0.40 * r_prov)
+        + (0.20 * r_tool)
     )
 
     info = {
