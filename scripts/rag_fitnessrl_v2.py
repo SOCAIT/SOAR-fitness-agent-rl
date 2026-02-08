@@ -411,10 +411,14 @@ except Exception as e:
             if not per_meal:
                 return 0.0, {"reason": "no_matching_meals", "missing_names": missing_names}
 
+            print(f"Per meal: {per_meal}")
             avg_meal_score = sum(m["score"] for m in per_meal) / len(per_meal)
             missing_penalty = len(missing_names) / max(1, len(meals))
             score = max(0.0, avg_meal_score * (1.0 - missing_penalty))
-
+            print(f"Score: {score}")
+            print(f"Missing names: {missing_names}")
+            print(f"Missing penalty: {missing_penalty}")
+            print(f"Avg meal score: {avg_meal_score}")
             info = {
                 "tool_recipes_count": len(tool_recipes),
                 "missing_names": missing_names,
