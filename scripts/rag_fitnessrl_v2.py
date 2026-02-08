@@ -436,6 +436,9 @@ except Exception as e:
                     }
                 )
 
+            print(f"Per meal: {per_meal}")
+            print(f"Missing names: {missing_names}")s
+
             if not per_meal:
                 return 0.0, {"reason": "no_matching_meals", "missing_names": missing_names}
 
@@ -665,6 +668,18 @@ async def combined_reward_v2(payload: dict, scenario_data: Scenario, traj):
 
     # 6. Tool usage reward
     r_tool, info_tool = verify_tool_usage(traj)
+
+    print(f"R macro: {r_macro}")
+    print(f"R variety h: {r_variety_h}")
+    print(f"R variety llm: {r_variety_llm}")
+    print(f"R provenance: {r_prov}")
+    print(f"R tool: {r_tool}")
+
+    # print info_macro, info_variety, info_prov, info_tool
+    print(f"Info macro: {info_macro}")
+    print(f"Info variety: {info_variety}")
+    print(f"Info prov: {info_prov}")
+    print(f"Info tool: {info_tool}")
 
     final_score = (
         (0.45 * r_macro)
