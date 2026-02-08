@@ -399,6 +399,7 @@ except Exception as e:
 
             per_meal = []
             missing_names = []
+            missing_details = []
             tolerance = 0.10  # 10% relative error tolerance
             name_match_cutoff = 0.92
             tool_names = list(tool_recipes.keys())
@@ -414,7 +415,24 @@ except Exception as e:
                     if best:
                         match_key = best[0]
                 if not match_key:
-                    missing_names.append(meal.get("name", ""))
+                    raw_name = meal.get("name", "")
+                    missing_names.append(raw_name)
+                    # Provide best-effort diagnostics for why match failed.
+                    best_candidate = None
+                    best_score = 0.0
+                    for cand in tool_names:
+                        score = difflib.SequenceMatcher(None, norm_name, cand).ratio()
+                        if score > best_score:
+                            best_score = score
+                            best_candidate = cand
+                    missing_details.append(
+                        {
+                            "plan_name": raw_name,
+                            "normalized": norm_name,
+                            "best_candidate": tool_recipes.get(best_candidate, {}).get("raw_name", ""),
+                            "best_score": best_score,
+                        }
+                    )
                     continue
 
                 base = tool_recipes[match_key]
@@ -454,7 +472,14 @@ except Exception as e:
             print(f"Missing names: {missing_names}")
 
             if not per_meal:
-                return 0.0, {"reason": "no_matching_meals", "missing_names": missing_names}
+                return 0.0, {
+                    "reason": "no_matching_meals",
+                    "missing_names": missing_names,
+                    "missing_details": missing_details,
+                    "tool_names_sample": [tool_recipes[n].get("raw_name", n) for n in tool_names[:10]],
+                    "tool_count": len(tool_names),
+                    "name_match_cutoff": name_match_cutoff,
+                }
 
             print(f"Per meal: {per_meal}")
             avg_meal_score = sum(m["score"] for m in per_meal) / len(per_meal)
@@ -467,6 +492,7 @@ except Exception as e:
             info = {
                 "tool_recipes_count": len(tool_recipes),
                 "missing_names": missing_names,
+                "missing_details": missing_details,
                 "per_meal": per_meal,
             }
             return score, info
@@ -592,6 +618,43 @@ def verify_variety_heuristic(payload: dict) -> Tuple[float, Dict]:
     return score, {"unique_meals": len(unique_names), "total_meals": num_meals, "reason": reason or ["ok"]}
 
 # 4. Tool Usage Reward (did the agent use recipe search?)
+def _collect_tool_recipes(traj) -> List[Dict[str, Any]]:
+    recipes: List[Dict[str, Any]] = []
+    # Metadata cache (fast path).
+    try:
+        cached = traj.metadata.get("tool_recipes", []) or []
+        if isinstance(cached, list):
+            recipes.extend(cached)
+    except Exception:
+        pass
+
+    # Tool logs (fallback).
+    for msg in getattr(traj, "messages_and_choices", []) or []:
+        if not isinstance(msg, dict) or msg.get("role") != "tool_log":
+            continue
+        content = msg.get("content", "")
+        try:
+            parsed = json.loads(content)
+        except Exception:
+            continue
+        results = []
+        if isinstance(parsed, dict):
+            if parsed.get("tool") == "recipe_search":
+                results = parsed.get("result", []) or []
+            elif isinstance(parsed.get("end"), dict) and parsed["end"].get("tool") == "recipe_semantic_search":
+                results = parsed["end"].get("result", []) or []
+        if isinstance(results, str):
+            try:
+                results = json.loads(results)
+            except Exception:
+                results = []
+        if isinstance(results, dict):
+            results = results.get("recipes", [])
+        if isinstance(results, list):
+            recipes.extend(results)
+
+    return recipes
+
 def verify_tool_usage(traj) -> Tuple[float, Dict]:
     tool_calls = []
     # First, check metadata cache (fast path).
@@ -621,6 +684,75 @@ def verify_tool_usage(traj) -> Tuple[float, Dict]:
     used_recipe = any(t == "recipe_semantic_search" for t in tool_calls)
     score = 1.0 if used_recipe else 0.0
     return score, {"used_recipe_search": used_recipe, "tool_calls": tool_calls}
+
+# 5. Tool Macro Alignment Reward (macros match any tool recipe)
+def verify_tool_macro_alignment(payload: dict, traj) -> Tuple[float, Dict]:
+    meals = payload.get("meals", [])
+    if not meals:
+        return 0.0, {"reason": "no_meals"}
+
+    recipes = _collect_tool_recipes(traj)
+    if not recipes:
+        return 0.0, {"reason": "no_tool_recipes"}
+
+    tolerance = 0.10
+    per_meal = []
+
+    for meal in meals:
+        if not isinstance(meal, dict):
+            continue
+        quantity = float(meal.get("quantity", 0) or 0)
+        provided = {
+            "calories": float(meal.get("calories", 0) or 0),
+            "protein": float(meal.get("proteins", 0) or 0),
+            "carbs": float(meal.get("carbs", 0) or 0),
+            "fat": float(meal.get("fats", 0) or 0),
+        }
+
+        best_err = None
+        best_recipe = None
+        for r in recipes:
+            if not isinstance(r, dict):
+                continue
+            base = {
+                "calories": float(r.get("calories", 0) or 0),
+                "protein": float(r.get("protein", 0) or 0),
+                "carbs": float(r.get("carbs", 0) or 0),
+                "fat": float(r.get("fat", 0) or 0),
+            }
+            expected = {k: base[k] * quantity for k in base}
+
+            errors = []
+            for key in ["calories", "protein", "carbs", "fat"]:
+                exp = expected[key]
+                if exp <= 0:
+                    continue
+                errors.append(abs(provided[key] - exp) / exp)
+            if not errors:
+                continue
+            mean_err = sum(errors) / len(errors)
+            if best_err is None or mean_err < best_err:
+                best_err = mean_err
+                best_recipe = r.get("name", "")
+
+        if best_err is None:
+            continue
+
+        meal_score = max(0.0, 1.0 - (best_err / tolerance))
+        per_meal.append(
+            {
+                "name": meal.get("name", ""),
+                "best_recipe": best_recipe,
+                "mean_error": best_err,
+                "score": meal_score,
+            }
+        )
+
+    if not per_meal:
+        return 0.0, {"reason": "no_comparable_meals"}
+
+    score = sum(m["score"] for m in per_meal) / len(per_meal)
+    return score, {"per_meal": per_meal, "recipes_count": len(recipes)}
 
 # 4. LLM Variety Judge
 class VarietyJudgeResponse(BaseModel):
@@ -683,11 +815,15 @@ async def combined_reward_v2(payload: dict, scenario_data: Scenario, traj):
     # 6. Tool usage reward
     r_tool, info_tool = verify_tool_usage(traj)
 
+    # 7. Tool macro alignment reward
+    r_tool_macro, info_tool_macro = verify_tool_macro_alignment(payload, traj)
+
     print(f"R macro: {r_macro}")
     print(f"R variety h: {r_variety_h}")
     print(f"R variety llm: {r_variety_llm}")
     print(f"R provenance: {r_prov}")
     print(f"R tool: {r_tool}")
+    print(f"R tool macro: {r_tool_macro}")
 
     # print info_macro, info_variety, info_prov, info_tool
     print(f"Info macro: {info_macro}")
@@ -696,12 +832,13 @@ async def combined_reward_v2(payload: dict, scenario_data: Scenario, traj):
     print(f"Info tool: {info_tool}")
 
     final_score = (
-        (0.40 * r_macro)
+        (0.35 * r_macro)
         #+ (0.30 * r_variety_h)
         + (0.10 * r_variety_llm)
         #+ (0.20 * r_prov)
-        + (0.40 * r_prov)
-        + (0.20 * r_tool)
+        + (0.30 * r_prov)
+        + (0.15 * r_tool)
+        + (0.10 * r_tool_macro)
     )
 
     info = {
@@ -711,10 +848,12 @@ async def combined_reward_v2(payload: dict, scenario_data: Scenario, traj):
         "r_variety_llm": r_variety_llm,
         "r_provenance": r_prov,
         "r_tool_usage": r_tool,
+        "r_tool_macro": r_tool_macro,
         "macro_info": info_macro,
         "variety_info": info_variety,
         "provenance_info": info_prov,
         "tool_usage_info": info_tool,
+        "tool_macro_info": info_tool_macro,
     }
 
     return final_score, info
