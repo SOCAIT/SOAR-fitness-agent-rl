@@ -34,7 +34,7 @@ ENFORCE_EAGER = True
 # TRAINING CONFIGURATION
 TRAINING_GROUPS_PER_STEP = 4
 TRAINING_NUM_EPOCHS = 3
-TRAINING_ROLLOUTS_PER_GROUP = 10
+TRAINING_ROLLOUTS_PER_GROUP = 16
 TRAINING_LEARNING_RATE = 1e-5
 TRAINING_MAX_STEPS = 300
 TRAINING_VALIDATION_EVERY = 10
@@ -401,7 +401,7 @@ except Exception as e:
             missing_details = []
             matched_count = 0
             tolerance = 0.10  # 10% relative error tolerance
-            name_match_cutoff = 0.92
+            name_match_cutoff = 0.82
             tool_names = list(tool_recipes.keys())
 
             for meal in meals:
@@ -716,14 +716,17 @@ async def combined_reward_v2(payload: dict, scenario_data: Scenario, traj):
     print(f"Info prov: {info_prov}")
     print(f"Info tool: {info_tool}")
 
-    final_score = (
-        (0.40 * r_macro)
-        #+ (0.30 * r_variety_h)
-        + (0.15 * r_variety_llm)
-        #+ (0.20 * r_prov)
-        + (0.35 * r_prov)
-        + (0.10 * r_tool)
-    )
+    # Gate: if the model didn't use recipe_semantic_search, cap the reward
+    # severely so RL can't find a local optimum at "skip tools & hallucinate".
+    if r_tool < 1.0:
+        final_score = 0.15 * r_macro  # small partial credit for format only
+    else:
+        final_score = (
+            (0.35 * r_macro)
+            + (0.15 * r_variety_llm)
+            + (0.30 * r_prov)
+            + (0.20 * r_tool)
+        )
 
     info = {
         "r_schema": r_schema,
@@ -803,7 +806,7 @@ async def rollout(model: art.Model, fitness_scenario: FitnessScenario) -> Projec
         final_answer = FinalAnswer(answer=payload)  # pydantic validation here
         return final_answer.model_dump()
 
-    chat_model = init_chat_model(f"{model.name}", temperature=0.2)
+    chat_model = init_chat_model(f"{model.name}", temperature=0.7)
     react_agent = create_react_agent(chat_model, [recipe_semantic_search, return_final_answer_tool])
 
     # ✅ MITIGATION #2: one-shot "repair" attempt if no final tool call happened
@@ -827,7 +830,7 @@ The tool argument must be a JSON OBJECT (a dict) with schema: {"meals":[{...}]}.
                     HumanMessage(content=scenario.question),
                     SystemMessage(content=repair_prompt),
                 ]},
-                config={"configurable": {"thread_id": str(uuid.uuid4())}, "recursion_limit": 20}
+                config={"configurable": {"thread_id": str(uuid.uuid4())}, "recursion_limit": 30}
             )
         except Exception as e:
             traj.messages_and_choices.append({"role": "system", "content": f"[REPAIR_EXCEPTION] {type(e).__name__}: {e}"})
